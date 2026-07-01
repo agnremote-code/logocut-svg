@@ -109,16 +109,6 @@ type BlobStorageDiagnostics = {
   selectedBlobAuthMode: BlobAuthMode;
 };
 
-type BlobDebugResult = {
-  writeOk: boolean;
-  readOk: boolean;
-  selectedBlobAuthMode: BlobAuthMode;
-  errorName: string | null;
-  errorMessage: string | null;
-  errorStatus: string | null;
-  errorCode: string | null;
-};
-
 type BlobCredentials =
   | {
       mode: "read-write-token";
@@ -305,54 +295,6 @@ function handleBlobSdkError(operation: string, error: unknown): never {
   });
 
   throw new StorageWriteFailedError();
-}
-
-export async function runBlobWriteDiagnostic(): Promise<BlobDebugResult> {
-  const selectedBlobAuthMode = resolveBlobCredentials().diagnostics
-    .selectedBlobAuthMode;
-  const pathname = "debug/blob-write-test.json";
-  const payload = JSON.stringify({
-    ok: true,
-    updatedAt: new Date().toISOString(),
-  });
-
-  try {
-    await put(pathname, payload, {
-      ...getBlobSdkOptions(),
-      contentType: "application/json",
-      allowOverwrite: true,
-    });
-  } catch (error) {
-    return {
-      writeOk: false,
-      readOk: false,
-      selectedBlobAuthMode,
-      ...getBlobErrorDetail(error),
-    };
-  }
-
-  try {
-    const result = await get(pathname, getBlobSdkOptions());
-
-    return {
-      writeOk: true,
-      readOk: Boolean(
-        result && result.statusCode === 200 && Boolean(result.stream),
-      ),
-      selectedBlobAuthMode,
-      errorName: null,
-      errorMessage: null,
-      errorStatus: null,
-      errorCode: null,
-    };
-  } catch (error) {
-    return {
-      writeOk: true,
-      readOk: false,
-      selectedBlobAuthMode,
-      ...getBlobErrorDetail(error),
-    };
-  }
 }
 
 function logStorageDiagnostics(

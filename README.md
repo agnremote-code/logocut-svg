@@ -7,7 +7,7 @@ The current product flow is:
 1. Upload a logo.
 2. Create a free watermarked SVG preview with Vectorizer.AI test mode.
 3. Review the preview before paying.
-4. Unlock the clean SVG with Stripe Checkout.
+4. Unlock the clean SVG with PayPal Checkout.
 5. Process the image with Vectorizer.AI production mode after payment.
 6. Preview and download the final SVG.
 
@@ -17,7 +17,7 @@ The current product flow is:
 - Recommends single-color or multi-color cut mode.
 - Stores job metadata and files durably when Vercel storage is configured.
 - Creates a free watermarked SVG preview before checkout.
-- Creates one-time Stripe Checkout sessions.
+- Creates one-time PayPal Checkout orders.
 - Runs clean SVG generation only after payment is confirmed.
 - Shows a result page with SVG preview and download.
 
@@ -44,6 +44,13 @@ Fill in the required values in `.env.local`.
 ```bash
 VECTORIZER_API_ID="your-api-id"
 VECTORIZER_API_SECRET="your-api-secret"
+
+NEXT_PUBLIC_PAYPAL_CLIENT_ID="your-paypal-sandbox-client-id"
+PAYPAL_CLIENT_ID="your-paypal-sandbox-client-id"
+PAYPAL_CLIENT_SECRET="your-paypal-sandbox-client-secret"
+PAYPAL_ENVIRONMENT="sandbox"
+
+# Stripe remains in the repo but is inactive in the public unlock UI.
 STRIPE_SECRET_KEY="sk_test_your-stripe-secret-key"
 STRIPE_WEBHOOK_SECRET="whsec_your-stripe-webhook-secret"
 
@@ -54,8 +61,10 @@ BLOB_READ_WRITE_TOKEN="vercel-blob-read-write-token"
 Notes:
 
 - `VECTORIZER_API_ID` and `VECTORIZER_API_SECRET` come from Vectorizer.AI.
-- `STRIPE_SECRET_KEY` should be a Stripe test key for this MVP.
-- `STRIPE_WEBHOOK_SECRET` is required for signed webhook handling in deployed environments.
+- `NEXT_PUBLIC_PAYPAL_CLIENT_ID` is the public PayPal JavaScript SDK client ID.
+- `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` are used server-side for the PayPal Orders API.
+- `PAYPAL_ENVIRONMENT` must be `sandbox` or `live`; use `sandbox` until launch.
+- Stripe code remains available in the repo, but PayPal is the active checkout path.
 - Vercel Blob stores uploaded images, generated SVG files, and job metadata JSON.
 - For local durable Blob testing, use `BLOB_READ_WRITE_TOKEN`.
 - In Vercel, a connected Blob store can provide `BLOB_STORE_ID` through system environment variables and the Blob SDK uses Vercel OIDC automatically; `BLOB_READ_WRITE_TOKEN` is optional in that setup.
@@ -86,11 +95,12 @@ npm run build
 
 ## Test Mode Notes
 
-Stripe:
+PayPal:
 
-- Checkout currently uses whatever `STRIPE_SECRET_KEY` is configured.
-- Use a Stripe test secret key locally.
-- Use Stripe's official test card for local verification: `4242 4242 4242 4242`.
+- Use PayPal sandbox credentials with `PAYPAL_ENVIRONMENT="sandbox"`.
+- The PayPal button creates an order for the server-side job price only.
+- Capturing a sandbox PayPal payment marks the job paid and triggers Vectorizer.AI production mode.
+- Do not test PayPal live mode until launch configuration is complete.
 
 Vectorizer.AI:
 

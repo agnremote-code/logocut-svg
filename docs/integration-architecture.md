@@ -2,15 +2,15 @@
 
 ## MVP Flow
 
-Landing page -> upload image -> free watermarked preview -> Stripe Checkout -> processing page -> result page.
+Landing page -> upload image -> free watermarked preview -> PayPal Checkout -> result page.
 
 ## Current Implementation
 
 - The landing page validates PNG/JPG uploads under 10 MB.
 - `POST /api/jobs` stores the original image durably and creates a durable job record.
 - `/api/jobs/[jobId]/vectorize` calls Vectorizer.AI test mode before payment and stores the watermarked preview SVG.
-- `/api/jobs/[jobId]/checkout` creates a one-time Stripe Checkout session only after the preview SVG exists.
-- `/processing/[jobId]` confirms payment, calls Vectorizer.AI production mode, and redirects to the result page.
+- `/api/paypal/orders` creates a one-time PayPal order only after the preview SVG exists.
+- `/api/paypal/orders/[orderId]/capture` captures PayPal payment, validates the server-side amount, calls Vectorizer.AI production mode once, and stores the final SVG.
 - `/result/[jobId]` displays the generated SVG state and enables download when the final SVG is ready.
 
 ## Production Boundary
@@ -25,12 +25,13 @@ Production path:
    - Create a durable unpaid job record.
    - Return the job id.
 
-2. Stripe Checkout
-   - Create a one-time payment session.
-   - Confirm payment through redirect verification and webhooks.
+2. PayPal Checkout
+   - Create a one-time PayPal order.
+   - Confirm capture server-side.
+   - Validate USD amount against the durable job cut type.
    - Mark the durable job as paid.
 
-3. Processing route
+3. Final generation
    - Fetch original image.
    - Send image to Vectorizer.AI through `lib/vectorizer.ts`.
    - Store generated SVG.

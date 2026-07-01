@@ -9,7 +9,7 @@ Before payment, the app posts uploaded images to the official Vectorizer.AI endp
 - `mode=test`
 - `output.file_format=svg`
 
-After successful Stripe payment, the app posts the same original image with:
+After successful payment, the app posts the same original image with:
 
 - `mode=production`
 - `output.file_format=svg`

@@ -16,26 +16,35 @@ Add these in Vercel Project Settings -> Environment Variables:
 ```bash
 VECTORIZER_API_ID
 VECTORIZER_API_SECRET
-STRIPE_SECRET_KEY
-STRIPE_WEBHOOK_SECRET
+NEXT_PUBLIC_PAYPAL_CLIENT_ID
+PAYPAL_CLIENT_ID
+PAYPAL_CLIENT_SECRET
+PAYPAL_ENVIRONMENT
 ```
 
 For the current MVP:
 
-- Use Stripe test keys.
+- Use PayPal sandbox credentials.
+- Set `PAYPAL_ENVIRONMENT` to `sandbox`.
 - Use Vectorizer.AI test mode for the free preview.
 - Use Vectorizer.AI production mode only after successful payment.
 - Connect Vercel Blob for uploaded images, generated SVG files, and job metadata JSON.
 - Confirm the project has either `BLOB_STORE_ID` from Vercel system environment variables with OIDC enabled or `BLOB_READ_WRITE_TOKEN` configured.
+- Stripe code remains in the repo but is inactive in the public unlock UI.
 
-## Stripe Live Keys Later
+## PayPal Live Mode Later
 
 Before accepting real customer payments:
 
-- Switch `STRIPE_SECRET_KEY` from `sk_test_...` to `sk_live_...`.
-- Create and test live-mode products/pricing behavior if moving away from inline Checkout prices.
-- Confirm Stripe business profile, public statement descriptor, support email, and payout settings.
+- Replace sandbox PayPal credentials with live PayPal REST app credentials.
+- Set `PAYPAL_ENVIRONMENT` to `live`.
+- Confirm PayPal business profile, support email, statement details, and payout settings.
+- Add and verify a live PayPal webhook for payment capture events if asynchronous reconciliation is needed.
 - Run a live low-value payment test if appropriate.
+
+## Stripe Legacy Code
+
+Stripe routes and webhook handling remain in the codebase for now, but they are not called by the active public result-page unlock flow.
 
 ## Vectorizer Production Mode Later
 
@@ -49,11 +58,13 @@ Before charging for production SVG output:
 - Add the production domain in Vercel.
 - Configure DNS records.
 - Confirm HTTPS is active.
-- Update Stripe allowed redirect expectations by testing Checkout from the production domain.
+- Confirm PayPal sandbox checkout opens from the production domain.
 
 ## Webhook Setup
 
-- Create a Stripe webhook endpoint for:
+- PayPal Checkout capture is verified server-side during the buyer approval flow.
+- Before launch, add a PayPal live webhook if you want a backup reconciliation path for completed captures.
+- If Stripe is reactivated later, create a Stripe webhook endpoint for:
 
 ```text
 https://your-domain.com/api/stripe/webhook
@@ -66,9 +77,7 @@ https://your-domain.com/api/stripe/webhook
 ## Final Pre-Launch Check
 
 - Upload a test PNG.
-- Complete Stripe Checkout.
-- Confirm redirect to `/processing/[jobId]`.
+- Complete PayPal sandbox checkout.
 - Confirm payment status becomes `paid`.
-- Confirm Vectorizer.AI returns a test SVG.
-- Confirm the result page shows `TEST MODE`.
+- Confirm Vectorizer.AI production mode generates the clean SVG after capture.
 - Confirm Download SVG returns an SVG attachment.

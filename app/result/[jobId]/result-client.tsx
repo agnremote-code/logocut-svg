@@ -1,11 +1,13 @@
 "use client";
 
+import Script from "next/script";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getClientJob, updateClientJobStatus } from "@/lib/client-job-store";
 import {
   ClientJobRecord,
   CUT_OPTIONS,
+  CutType,
   JobSummary,
   PaymentStatus,
 } from "@/lib/job-types";
@@ -14,8 +16,34 @@ type ResultClientProps = {
   jobId: string;
 };
 
+type PayPalButtons = {
+  render: (container: HTMLElement) => Promise<void>;
+};
+
+type PayPalButtonsOptions = {
+  createOrder: () => Promise<string>;
+  onApprove: (data: { orderID?: string }) => Promise<void>;
+  onCancel: () => void;
+  onError: () => void;
+  style: {
+    color: "gold";
+    label: "paypal";
+    layout: "vertical";
+    shape: "rect";
+  };
+};
+
+declare global {
+  interface Window {
+    paypal?: {
+      Buttons: (options: PayPalButtonsOptions) => PayPalButtons;
+    };
+  }
+}
+
 export default function ResultClient({ jobId }: ResultClientProps) {
   const router = useRouter();
+  const paypalButtonContainerRef = useRef<HTMLDivElement | null>(null);
   const [job, setJob] = useState<ClientJobRecord | null>(null);
   const [serverJob, setServerJob] = useState<JobSummary | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -25,17 +53,25 @@ export default function ResultClient({ jobId }: ResultClientProps) {
   const [isPreviewReady, setIsPreviewReady] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("unpaid");
   const [isStartingCheckout, setIsStartingCheckout] = useState(false);
+  const [isPayPalScriptReady, setIsPayPalScriptReady] = useState(false);
   const [creditsCalculated, setCreditsCalculated] = useState<string | null>(
     null,
   );
   const [creditsCharged, setCreditsCharged] = useState<string | null>(null);
+  const paypalClientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID;
+  const activeCutType: CutType = serverJob?.cutType ?? job?.cutType ?? "single";
+  const paypalSdkUrl = paypalClientId
+    ? `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(
+        paypalClientId,
+      )}&currency=USD&intent=capture&components=buttons`
+    : "";
 
   const selectedCut = useMemo(
     () =>
       CUT_OPTIONS.find(
-        (option) => option.id === (job?.cutType ?? serverJob?.cutType),
+        (option) => option.id === activeCutType,
       ),
-    [job?.cutType, serverJob?.cutType],
+    [activeCutType],
   );
 
   useEffect(() => {
@@ -116,45 +152,140 @@ export default function ResultClient({ jobId }: ResultClientProps) {
     return () => URL.revokeObjectURL(objectUrl);
   }, [job?.imageBlob]);
 
+  useEffect(() => {
+    if (window.paypal) {
+      setIsPayPalScriptReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (
+      !isPayPalScriptReady ||
+      !window.paypal ||
+      !paypalButtonContainerRef.current ||
+      !isPreviewReady ||
+      isSvgReady ||
+      paymentStatus === "paid"
+    ) {
+      return;
+    }
+
+    const container = paypalButtonContainerRef.current;
+    let isMounted = true;
+    container.innerHTML = "";
+
+    const buttons = window.paypal.Buttons({
+      style: {
+        color: "gold",
+        label: "paypal",
+        layout: "vertical",
+        shape: "rect",
+      },
+      createOrder: async () => {
+        setIsStartingCheckout(true);
+        setResultError("");
+
+        const response = await fetch("/api/paypal/orders", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ jobId, cutType: activeCutType }),
+        });
+        const payload = (await response.json()) as {
+          orderId?: string;
+          error?: string;
+        };
+
+        if (!response.ok || !payload.orderId) {
+          const message = payload.error ?? "PayPal order creation failed";
+          setResultError(message);
+          setIsStartingCheckout(false);
+          throw new Error(message);
+        }
+
+        return payload.orderId;
+      },
+      onApprove: async (data) => {
+        const orderId = data.orderID;
+
+        if (!orderId) {
+          setIsStartingCheckout(false);
+          setResultError("PayPal capture failed");
+          return;
+        }
+
+        setResultError("");
+        setIsStartingCheckout(true);
+
+        const response = await fetch(`/api/paypal/orders/${orderId}/capture`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ jobId }),
+        });
+        const payload = (await response.json()) as {
+          resultUrl?: string;
+          processingUrl?: string;
+          error?: string;
+        };
+
+        if (!response.ok) {
+          const message = payload.error ?? "PayPal capture failed";
+          setResultError(message);
+          setIsStartingCheckout(false);
+          throw new Error(message);
+        }
+
+        window.location.href =
+          payload.resultUrl ?? payload.processingUrl ?? `/result/${jobId}`;
+      },
+      onCancel: () => {
+        setIsStartingCheckout(false);
+      },
+      onError: () => {
+        if (!isMounted) {
+          return;
+        }
+
+        setIsStartingCheckout(false);
+        setResultError("PayPal capture failed");
+      },
+    });
+
+    buttons.render(container).catch(() => {
+      if (!isMounted) {
+        return;
+      }
+
+      setResultError("PayPal is not configured");
+    });
+
+    return () => {
+      isMounted = false;
+      container.innerHTML = "";
+    };
+  }, [
+    activeCutType,
+    isPayPalScriptReady,
+    isPreviewReady,
+    isSvgReady,
+    jobId,
+    paymentStatus,
+  ]);
+
   const svgResultUrl = `/api/jobs/${jobId}/result`;
   const svgPreviewUrl = `/api/jobs/${jobId}/preview`;
   const originalImageUrl = serverJob ? `/api/jobs/${jobId}/original` : previewUrl;
   const displayFileName = serverJob?.fileName ?? job?.fileName ?? "Uploaded logo";
   const downloadFileName = `${displayFileName.replace(/\.[^.]+$/, "")}-logocut.svg`;
   const unlockLabel =
-    (serverJob?.cutType ?? job?.cutType) === "multi"
-      ? "Unlock layered SVG - $9"
-      : "Unlock clean SVG - $5";
+    activeCutType === "multi"
+      ? "Unlock with PayPal - $9"
+      : "Unlock with PayPal - $5";
   const finalGenerationFailed =
     paymentStatus === "paid" && !isSvgReady && Boolean(resultError);
-
-  const handleUnlock = async () => {
-    setIsStartingCheckout(true);
-    setResultError("");
-
-    try {
-      const checkoutResponse = await fetch(`/api/jobs/${jobId}/checkout`, {
-        method: "POST",
-      });
-      const checkoutPayload = (await checkoutResponse.json()) as {
-        checkoutUrl?: string;
-        error?: string;
-      };
-
-      if (!checkoutResponse.ok || !checkoutPayload.checkoutUrl) {
-        throw new Error(
-          checkoutPayload.error ?? "Could not open Stripe Checkout.",
-        );
-      }
-
-      window.location.href = checkoutPayload.checkoutUrl;
-    } catch (error) {
-      setResultError(
-        error instanceof Error ? error.message : "Could not open Stripe Checkout.",
-      );
-      setIsStartingCheckout(false);
-    }
-  };
 
   if (isLoading) {
     return (
@@ -307,14 +438,45 @@ export default function ResultClient({ jobId }: ResultClientProps) {
                 Download SVG
               </a>
             ) : isPreviewReady && paymentStatus !== "paid" ? (
-              <button
-                className="mt-5 flex h-14 w-full items-center justify-center rounded-[8px] bg-[#315f46] px-6 text-base font-semibold text-white shadow-[0_10px_24px_rgba(49,95,70,0.22)] transition hover:bg-[#264d39] focus:outline-none focus:ring-4 focus:ring-[#b8d3bf] disabled:cursor-not-allowed disabled:bg-[#8aa192] disabled:shadow-none"
-                type="button"
-                disabled={isStartingCheckout}
-                onClick={handleUnlock}
-              >
-                {isStartingCheckout ? "Opening checkout..." : unlockLabel}
-              </button>
+              <div className="mt-5">
+                <div className="rounded-[8px] border border-[#d8c36b] bg-[#fff9dc] px-4 py-3">
+                  <p className="text-sm font-semibold text-[#5c4710]">
+                    {unlockLabel}
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-[#6a5414]">
+                    Pay securely with PayPal. After payment, your clean SVG will
+                    be generated and ready to download.
+                  </p>
+                </div>
+
+                {paypalClientId ? (
+                  <>
+                    <Script
+                      src={paypalSdkUrl}
+                      strategy="afterInteractive"
+                      onLoad={() => setIsPayPalScriptReady(true)}
+                      onError={() => setResultError("PayPal is not configured")}
+                    />
+                    <div
+                      ref={paypalButtonContainerRef}
+                      className="mt-4 min-h-[56px]"
+                    />
+                    {isStartingCheckout ? (
+                      <p className="mt-3 text-center text-sm font-medium text-[#315f46]">
+                        Confirming payment and creating your clean SVG...
+                      </p>
+                    ) : null}
+                  </>
+                ) : (
+                  <button
+                    className="mt-4 flex h-14 w-full cursor-not-allowed items-center justify-center rounded-[8px] bg-[#8aa192] px-6 text-base font-semibold text-white"
+                    type="button"
+                    disabled
+                  >
+                    PayPal is not configured
+                  </button>
+                )}
+              </div>
             ) : (
               <button
                 className="mt-5 flex h-14 w-full cursor-not-allowed items-center justify-center rounded-[8px] bg-[#8aa192] px-6 text-base font-semibold text-white"

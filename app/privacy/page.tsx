@@ -14,7 +14,7 @@ export default function PrivacyPage() {
             paid SVG downloads for the current workflow.
           </p>
           <p>
-            Payments are handled by Stripe. LogoCut SVG does not store full
+            Payments are handled by PayPal. LogoCut SVG does not store full
             card details.
           </p>
           <p>

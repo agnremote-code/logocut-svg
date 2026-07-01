@@ -29,7 +29,7 @@ export default function ProcessingClient({
   const [vectorizerMessage, setVectorizerMessage] = useState("");
   const [paymentState, setPaymentState] = useState<PaymentState>("checking");
   const [paymentMessage, setPaymentMessage] = useState(
-    "Confirming your Stripe payment...",
+    "Confirming your payment...",
   );
 
   const totalDurationMs = useMemo(

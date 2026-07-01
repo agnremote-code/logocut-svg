@@ -19,19 +19,25 @@ export type ServerJobRecord = JobSummary & {
   jobId: string;
   price: string;
   paymentStatus: PaymentStatus;
+  paymentProvider?: "stripe" | "paypal";
   previewStatus: StoredFileStatus;
   finalStatus: StoredFileStatus;
   vectorizerMode?: VectorizerMode;
   creditsCalculated?: string | null;
   creditsCharged?: string | null;
   checkoutSessionId?: string;
+  paypalOrderId?: string;
+  paypalCaptureId?: string;
   paidAt?: string;
+  amountPaid?: string;
+  currency?: string;
   originalPathname?: string;
   originalBlobPath?: string;
   originalImageUrl?: string;
   previewPathname?: string;
   previewBlobPath?: string;
   previewSvgUrl?: string;
+  finalSvgPathname?: string;
   finalPathname?: string;
   finalBlobPath?: string;
   finalSvgUrl?: string;
@@ -541,6 +547,7 @@ export async function saveCheckoutSession({
 }) {
   return updateServerJob(jobId, (job) => {
     job.checkoutSessionId = checkoutSessionId;
+    job.paymentProvider = "stripe";
     job.paymentStatus = "unpaid";
     job.status = "awaiting_payment";
   });
@@ -555,8 +562,52 @@ export async function markServerJobPaid({
 }) {
   return updateServerJob(jobId, (job) => {
     job.checkoutSessionId = checkoutSessionId;
+    job.paymentProvider = "stripe";
     job.paymentStatus = "paid";
     job.paidAt = new Date().toISOString();
+
+    if (job.status === "awaiting_payment" || job.status === "preview_ready") {
+      job.status = "created";
+    }
+  });
+}
+
+export async function savePayPalOrder({
+  jobId,
+  paypalOrderId,
+}: {
+  jobId: string;
+  paypalOrderId: string;
+}) {
+  return updateServerJob(jobId, (job) => {
+    job.paymentProvider = "paypal";
+    job.paypalOrderId = paypalOrderId;
+    job.paymentStatus = "unpaid";
+    job.status = "awaiting_payment";
+  });
+}
+
+export async function markServerJobPaidWithPayPal({
+  jobId,
+  paypalOrderId,
+  paypalCaptureId,
+  amountPaid,
+  currency,
+}: {
+  jobId: string;
+  paypalOrderId: string;
+  paypalCaptureId: string;
+  amountPaid: string;
+  currency: string;
+}) {
+  return updateServerJob(jobId, (job) => {
+    job.paymentProvider = "paypal";
+    job.paypalOrderId = paypalOrderId;
+    job.paypalCaptureId = paypalCaptureId;
+    job.paymentStatus = "paid";
+    job.paidAt = job.paidAt ?? new Date().toISOString();
+    job.amountPaid = amountPaid;
+    job.currency = currency;
 
     if (job.status === "awaiting_payment" || job.status === "preview_ready") {
       job.status = "created";
@@ -636,6 +687,7 @@ export async function saveServerJobFinalSvg({
 
     job.status = "ready";
     job.finalStatus = "ready";
+    job.finalSvgPathname = finalFile?.pathname ?? job.finalSvgPathname;
     job.finalPathname = finalFile?.pathname ?? job.finalPathname;
     job.finalBlobPath = finalFile?.pathname ?? job.finalBlobPath;
     job.finalSvgUrl = finalFile?.url ?? job.finalSvgUrl;

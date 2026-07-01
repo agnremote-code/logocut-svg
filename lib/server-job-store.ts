@@ -393,51 +393,9 @@ function applyPayPalPaymentMetadata(
   job.currency = payment.currency;
 }
 
-function preservePaidPaymentFields(
-  nextJob: ServerJobRecord,
-  existingJob: ServerJobRecord | null,
-): ServerJobRecord {
-  if (!existingJob || existingJob.paymentStatus !== "paid") {
-    return nextJob;
-  }
-
-  return {
-    ...nextJob,
-    paymentStatus: "paid" as const,
-    paymentProvider: nextJob.paymentProvider ?? existingJob.paymentProvider,
-    checkoutSessionId: nextJob.checkoutSessionId ?? existingJob.checkoutSessionId,
-    paypalOrderId: nextJob.paypalOrderId ?? existingJob.paypalOrderId,
-    paypalCaptureId: nextJob.paypalCaptureId ?? existingJob.paypalCaptureId,
-    paidAt: nextJob.paidAt ?? existingJob.paidAt,
-    amountPaid: nextJob.amountPaid ?? existingJob.amountPaid,
-    currency: nextJob.currency ?? existingJob.currency,
-  };
-}
-
-async function readDurableJobForMerge(jobId: string) {
-  try {
-    const metadata = await get(getMetadataPath(jobId), getBlobSdkOptions());
-
-    if (!metadata || metadata.statusCode !== 200 || !metadata.stream) {
-      return null;
-    }
-
-    return JSON.parse(await new Response(metadata.stream).text()) as ServerJobRecord;
-  } catch (error) {
-    if (error instanceof BlobNotFoundError) {
-      return null;
-    }
-
-    handleBlobSdkError("get-metadata-for-merge", error);
-  }
-}
-
 async function saveDurableJob(job: ServerJobRecord) {
-  const existingJob = await readDurableJobForMerge(job.id);
-  const jobToSave = preservePaidPaymentFields(job, existingJob);
-
   try {
-    await put(getMetadataPath(job.id), JSON.stringify(jobToSave, null, 2), {
+    await put(getMetadataPath(job.id), JSON.stringify(job, null, 2), {
       ...getBlobSdkOptions(),
       contentType: "application/json",
       addRandomSuffix: false,
@@ -447,7 +405,7 @@ async function saveDurableJob(job: ServerJobRecord) {
     handleBlobSdkError("put-metadata", error);
   }
 
-  return jobToSave;
+  return job;
 }
 
 async function putDurableFile({

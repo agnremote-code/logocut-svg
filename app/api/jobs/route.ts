@@ -8,10 +8,13 @@ import {
   createServerJob,
   getStorageNotConfiguredResponseBody,
   isStorageNotConfiguredError,
+  logUploadStorageDiagnostics,
   toJobSummary,
 } from "@/lib/server-job-store";
 
 export async function POST(request: Request) {
+  logUploadStorageDiagnostics("api/jobs:upload-start");
+
   let formData: FormData;
 
   try {

@@ -1,4 +1,9 @@
-import { BlobError, BlobNotFoundError, head, put } from "@vercel/blob";
+import {
+  BlobError,
+  BlobNotFoundError,
+  head,
+  put,
+} from "@vercel/blob";
 import {
   CutType,
   JobStatus,
@@ -68,6 +73,7 @@ export class StorageNotConfiguredError extends Error {
 
 const serverJobStore = globalThis as typeof globalThis & {
   logoCutJobs?: Map<string, MemoryServerJobRecord>;
+  logoCutStorageDiagnosticsLogged?: boolean;
 };
 
 function getMemoryJobs() {
@@ -78,40 +84,160 @@ function getMemoryJobs() {
   return serverJobStore.logoCutJobs;
 }
 
-function hasBlobReadWriteToken() {
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim());
+type BlobAuthMode = "read-write-token" | "oidc" | "none";
+
+type BlobStorageDiagnostics = {
+  hasBlobReadWriteToken: boolean;
+  blobReadWriteTokenLooksNonEmpty: boolean;
+  blobReadWriteTokenStartsWithVercelBlobRw: boolean;
+  hasBlobStoreId: boolean;
+  blobStoreIdLooksNonEmpty: boolean;
+  hasVercelOidcToken: boolean;
+  nodeEnv: string | null;
+  vercel: string | null;
+  vercelEnv: string | null;
+  selectedBlobAuthMode: BlobAuthMode;
+};
+
+type BlobCredentials =
+  | {
+      mode: "read-write-token";
+      options: BlobAuthCommandOptions;
+      diagnostics: BlobStorageDiagnostics;
+    }
+  | {
+      mode: "oidc";
+      options: BlobAuthCommandOptions;
+      diagnostics: BlobStorageDiagnostics;
+    }
+  | {
+      mode: "none";
+      reason: string;
+      diagnostics: BlobStorageDiagnostics;
+    };
+
+type BlobAuthCommandOptions = {
+  token?: string;
+  storeId?: string;
+  oidcToken?: string;
+};
+
+function stripSurroundingQuotes(value: string) {
+  const trimmed = value.trim();
+  const first = trimmed.at(0);
+  const last = trimmed.at(-1);
+
+  if (
+    trimmed.length >= 2 &&
+    ((first === "\"" && last === "\"") || (first === "'" && last === "'"))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+
+  return trimmed;
 }
 
-function hasBlobStoreId() {
-  return Boolean(process.env.BLOB_STORE_ID?.trim());
+function getNormalizedEnvValue(name: string, stripQuotes = false) {
+  const value = process.env[name];
+
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return stripQuotes ? stripSurroundingQuotes(value) : value.trim();
 }
 
-function hasAnyBlobEnvironment() {
-  return hasBlobReadWriteToken() || hasBlobStoreId();
+function resolveBlobCredentials(): BlobCredentials {
+  const rawBlobReadWriteToken = process.env.BLOB_READ_WRITE_TOKEN;
+  const rawBlobStoreId = process.env.BLOB_STORE_ID;
+  const blobReadWriteToken = getNormalizedEnvValue(
+    "BLOB_READ_WRITE_TOKEN",
+    true,
+  );
+  const blobStoreId = getNormalizedEnvValue("BLOB_STORE_ID", true);
+  const vercelOidcToken = getNormalizedEnvValue("VERCEL_OIDC_TOKEN");
+  const selectedBlobAuthMode: BlobAuthMode = blobReadWriteToken
+    ? "read-write-token"
+    : blobStoreId && vercelOidcToken
+      ? "oidc"
+      : "none";
+  const diagnostics: BlobStorageDiagnostics = {
+    hasBlobReadWriteToken: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
+    blobReadWriteTokenLooksNonEmpty: Boolean(blobReadWriteToken),
+    blobReadWriteTokenStartsWithVercelBlobRw:
+      blobReadWriteToken.startsWith("vercel_blob_rw_"),
+    hasBlobStoreId: Boolean(process.env.BLOB_STORE_ID),
+    blobStoreIdLooksNonEmpty: Boolean(blobStoreId),
+    hasVercelOidcToken: Boolean(vercelOidcToken),
+    nodeEnv: process.env.NODE_ENV ?? null,
+    vercel: process.env.VERCEL ?? null,
+    vercelEnv: process.env.VERCEL_ENV ?? null,
+    selectedBlobAuthMode,
+  };
+
+  if (blobReadWriteToken) {
+    return {
+      mode: "read-write-token",
+      options: { token: blobReadWriteToken },
+      diagnostics,
+    };
+  }
+
+  if (blobStoreId && vercelOidcToken) {
+    return {
+      mode: "oidc",
+      options: {
+        storeId: blobStoreId,
+        oidcToken: vercelOidcToken,
+      },
+      diagnostics,
+    };
+  }
+
+  let reason = "missing token and missing OIDC pair";
+
+  if (typeof rawBlobReadWriteToken === "string" && !blobReadWriteToken) {
+    reason = "token present but rejected by our own validation";
+  } else if (blobStoreId && !vercelOidcToken) {
+    reason = "BLOB_STORE_ID present but VERCEL_OIDC_TOKEN missing";
+  } else if (typeof rawBlobStoreId === "string" && !blobStoreId) {
+    reason = "BLOB_STORE_ID present but rejected by our own validation";
+  }
+
+  return {
+    mode: "none",
+    reason,
+    diagnostics,
+  };
 }
 
 function hasDurableStorageConfig() {
-  return hasAnyBlobEnvironment();
+  return resolveBlobCredentials().mode !== "none";
 }
 
 function shouldUseMemoryStorage() {
-  return process.env.NODE_ENV !== "production" && !hasAnyBlobEnvironment();
+  return process.env.NODE_ENV !== "production" && !hasDurableStorageConfig();
 }
 
-function assertDurableStorageConfigured() {
-  if (!hasDurableStorageConfig()) {
+function getBlobCredentialsOrThrow() {
+  const credentials = resolveBlobCredentials();
+
+  if (credentials.mode === "none") {
+    logStorageDiagnostics("server-job-store:missing-blob-auth", {
+      reason: credentials.reason,
+    });
     throw new StorageNotConfiguredError();
   }
+
+  return credentials;
 }
 
 function getBlobCommandOptions() {
-  const storeId = process.env.BLOB_STORE_ID?.trim();
-  const oidcToken = process.env.VERCEL_OIDC_TOKEN?.trim();
+  return getBlobCredentialsOrThrow().options;
+}
 
-  return {
-    ...(storeId ? { storeId } : {}),
-    ...(oidcToken ? { oidcToken } : {}),
-  };
+export function getBlobStorageDiagnostics(): BlobStorageDiagnostics {
+  return resolveBlobCredentials().diagnostics;
 }
 
 function isBlobConfigurationError(error: unknown) {
@@ -125,6 +251,28 @@ function isBlobConfigurationError(error: unknown) {
 
   return /credentials|token|store|auth|access/i.test(error.message);
 }
+
+function logStorageDiagnostics(
+  source: string,
+  extra?: Record<string, string | number | boolean | null>,
+) {
+  console.info("[LogoCut SVG] Blob storage diagnostics", {
+    source,
+    ...getBlobStorageDiagnostics(),
+    ...extra,
+  });
+}
+
+function logStorageDiagnosticsOnce(source: string) {
+  if (serverJobStore.logoCutStorageDiagnosticsLogged) {
+    return;
+  }
+
+  serverJobStore.logoCutStorageDiagnosticsLogged = true;
+  logStorageDiagnostics(source);
+}
+
+logStorageDiagnosticsOnce("server-job-store:init");
 
 function getJobFolder(jobId: string) {
   return `jobs/${jobId}`;
@@ -174,8 +322,6 @@ function createBaseJob(input: CreateServerJobInput): ServerJobRecord {
 }
 
 async function saveDurableJob(job: ServerJobRecord) {
-  assertDurableStorageConfigured();
-
   try {
     await put(getMetadataPath(job.id), JSON.stringify(job, null, 2), {
       access: "public",
@@ -186,6 +332,11 @@ async function saveDurableJob(job: ServerJobRecord) {
     });
   } catch (error) {
     if (isBlobConfigurationError(error)) {
+      logStorageDiagnostics("server-job-store:metadata-put-auth-error", {
+        reason: "SDK threw auth error",
+        errorName: error instanceof Error ? error.name : "unknown",
+        errorMessage: error instanceof Error ? error.message : "unknown",
+      });
       throw new StorageNotConfiguredError();
     }
 
@@ -206,8 +357,6 @@ async function putDurableFile({
   body: Buffer;
   contentType: string;
 }) {
-  assertDurableStorageConfigured();
-
   const pathname = `jobs/${jobId}/${filename}`;
   let blob;
 
@@ -221,6 +370,11 @@ async function putDurableFile({
     });
   } catch (error) {
     if (isBlobConfigurationError(error)) {
+      logStorageDiagnostics("server-job-store:file-put-auth-error", {
+        reason: "SDK threw auth error",
+        errorName: error instanceof Error ? error.name : "unknown",
+        errorMessage: error instanceof Error ? error.message : "unknown",
+      });
       throw new StorageNotConfiguredError();
     }
 
@@ -280,6 +434,10 @@ export function getStorageNotConfiguredResponseBody() {
   return { error: "Storage is not configured" };
 }
 
+export function logUploadStorageDiagnostics(source: string) {
+  logStorageDiagnostics(source);
+}
+
 export async function createServerJob(input: CreateServerJobInput) {
   const baseJob = createBaseJob(input);
 
@@ -312,8 +470,6 @@ export async function getServerJob(jobId: string) {
     return getMemoryJobs().get(jobId) ?? null;
   }
 
-  assertDurableStorageConfigured();
-
   try {
     const metadata = await head(getMetadataPath(jobId), getBlobCommandOptions());
     const response = await fetch(metadata.url, { cache: "no-store" });
@@ -329,6 +485,11 @@ export async function getServerJob(jobId: string) {
     }
 
     if (isBlobConfigurationError(error)) {
+      logStorageDiagnostics("server-job-store:metadata-head-auth-error", {
+        reason: "SDK threw auth error",
+        errorName: error instanceof Error ? error.name : "unknown",
+        errorMessage: error instanceof Error ? error.message : "unknown",
+      });
       throw new StorageNotConfiguredError();
     }
 

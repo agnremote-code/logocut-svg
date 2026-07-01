@@ -7,7 +7,9 @@ import {
 import {
   createServerJob,
   getStorageNotConfiguredResponseBody,
+  getStorageWriteFailedResponseBody,
   isStorageNotConfiguredError,
+  isStorageWriteFailedError,
   logUploadStorageDiagnostics,
   toJobSummary,
 } from "@/lib/server-job-store";
@@ -71,6 +73,12 @@ export async function POST(request: Request) {
     if (isStorageNotConfiguredError(error)) {
       return NextResponse.json(getStorageNotConfiguredResponseBody(), {
         status: 503,
+      });
+    }
+
+    if (isStorageWriteFailedError(error)) {
+      return NextResponse.json(getStorageWriteFailedResponseBody(), {
+        status: 502,
       });
     }
 

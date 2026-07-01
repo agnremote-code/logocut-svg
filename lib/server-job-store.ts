@@ -1,6 +1,6 @@
 import {
-  BlobError,
   BlobNotFoundError,
+  get,
   head,
   put,
 } from "@vercel/blob";
@@ -26,10 +26,13 @@ export type ServerJobRecord = JobSummary & {
   creditsCharged?: string | null;
   checkoutSessionId?: string;
   paidAt?: string;
+  originalPathname?: string;
   originalBlobPath?: string;
   originalImageUrl?: string;
+  previewPathname?: string;
   previewBlobPath?: string;
   previewSvgUrl?: string;
+  finalPathname?: string;
   finalBlobPath?: string;
   finalSvgUrl?: string;
   svgContentType?: "image/svg+xml";
@@ -71,6 +74,13 @@ export class StorageNotConfiguredError extends Error {
   }
 }
 
+export class StorageWriteFailedError extends Error {
+  constructor() {
+    super("Storage write failed");
+    this.name = "StorageWriteFailedError";
+  }
+}
+
 const serverJobStore = globalThis as typeof globalThis & {
   logoCutJobs?: Map<string, MemoryServerJobRecord>;
   logoCutStorageDiagnosticsLogged?: boolean;
@@ -99,6 +109,16 @@ type BlobStorageDiagnostics = {
   selectedBlobAuthMode: BlobAuthMode;
 };
 
+type BlobDebugResult = {
+  writeOk: boolean;
+  readOk: boolean;
+  selectedBlobAuthMode: BlobAuthMode;
+  errorName: string | null;
+  errorMessage: string | null;
+  errorStatus: string | null;
+  errorCode: string | null;
+};
+
 type BlobCredentials =
   | {
       mode: "read-write-token";
@@ -120,6 +140,10 @@ type BlobAuthCommandOptions = {
   token?: string;
   storeId?: string;
   oidcToken?: string;
+};
+
+type BlobSdkOptions = BlobAuthCommandOptions & {
+  access: "private";
 };
 
 function stripSurroundingQuotes(value: string) {
@@ -232,24 +256,103 @@ function getBlobCredentialsOrThrow() {
   return credentials;
 }
 
-function getBlobCommandOptions() {
-  return getBlobCredentialsOrThrow().options;
+function getBlobSdkOptions(): BlobSdkOptions {
+  return {
+    access: "private",
+    ...getBlobCredentialsOrThrow().options,
+  };
 }
 
 export function getBlobStorageDiagnostics(): BlobStorageDiagnostics {
   return resolveBlobCredentials().diagnostics;
 }
 
-function isBlobConfigurationError(error: unknown) {
-  if (error instanceof StorageNotConfiguredError) {
-    return true;
+function getBlobErrorDetail(error: unknown) {
+  return {
+    errorName: error instanceof Error ? error.name : "unknown",
+    errorMessage: error instanceof Error ? error.message : "unknown",
+    errorStatus:
+      typeof error === "object" &&
+      error !== null &&
+      "status" in error &&
+      (typeof error.status === "string" || typeof error.status === "number")
+        ? String(error.status)
+        : null,
+    errorCode:
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (typeof error.code === "string" || typeof error.code === "number")
+        ? String(error.code)
+        : null,
+  };
+}
+
+function handleBlobSdkError(operation: string, error: unknown): never {
+  const credentials = resolveBlobCredentials();
+
+  if (credentials.mode === "none") {
+    logStorageDiagnostics(`server-job-store:${operation}:missing-blob-auth`, {
+      reason: credentials.reason,
+    });
+    throw new StorageNotConfiguredError();
   }
 
-  if (!(error instanceof BlobError)) {
-    return false;
+  logStorageDiagnostics(`server-job-store:${operation}:blob-sdk-error`, {
+    operation,
+    reason: "SDK threw storage error",
+    ...getBlobErrorDetail(error),
+  });
+
+  throw new StorageWriteFailedError();
+}
+
+export async function runBlobWriteDiagnostic(): Promise<BlobDebugResult> {
+  const selectedBlobAuthMode = resolveBlobCredentials().diagnostics
+    .selectedBlobAuthMode;
+  const pathname = "debug/blob-write-test.json";
+  const payload = JSON.stringify({
+    ok: true,
+    updatedAt: new Date().toISOString(),
+  });
+
+  try {
+    await put(pathname, payload, {
+      ...getBlobSdkOptions(),
+      contentType: "application/json",
+      allowOverwrite: true,
+    });
+  } catch (error) {
+    return {
+      writeOk: false,
+      readOk: false,
+      selectedBlobAuthMode,
+      ...getBlobErrorDetail(error),
+    };
   }
 
-  return /credentials|token|store|auth|access/i.test(error.message);
+  try {
+    const result = await get(pathname, getBlobSdkOptions());
+
+    return {
+      writeOk: true,
+      readOk: Boolean(
+        result && result.statusCode === 200 && Boolean(result.stream),
+      ),
+      selectedBlobAuthMode,
+      errorName: null,
+      errorMessage: null,
+      errorStatus: null,
+      errorCode: null,
+    };
+  } catch (error) {
+    return {
+      writeOk: true,
+      readOk: false,
+      selectedBlobAuthMode,
+      ...getBlobErrorDetail(error),
+    };
+  }
 }
 
 function logStorageDiagnostics(
@@ -324,23 +427,13 @@ function createBaseJob(input: CreateServerJobInput): ServerJobRecord {
 async function saveDurableJob(job: ServerJobRecord) {
   try {
     await put(getMetadataPath(job.id), JSON.stringify(job, null, 2), {
-      access: "public",
+      ...getBlobSdkOptions(),
       contentType: "application/json",
       addRandomSuffix: false,
       allowOverwrite: true,
-      ...getBlobCommandOptions(),
     });
   } catch (error) {
-    if (isBlobConfigurationError(error)) {
-      logStorageDiagnostics("server-job-store:metadata-put-auth-error", {
-        reason: "SDK threw auth error",
-        errorName: error instanceof Error ? error.name : "unknown",
-        errorMessage: error instanceof Error ? error.message : "unknown",
-      });
-      throw new StorageNotConfiguredError();
-    }
-
-    throw error;
+    handleBlobSdkError("put-metadata", error);
   }
 
   return job;
@@ -362,23 +455,13 @@ async function putDurableFile({
 
   try {
     blob = await put(pathname, body, {
-      access: "public",
+      ...getBlobSdkOptions(),
       contentType,
       addRandomSuffix: false,
       allowOverwrite: true,
-      ...getBlobCommandOptions(),
     });
   } catch (error) {
-    if (isBlobConfigurationError(error)) {
-      logStorageDiagnostics("server-job-store:file-put-auth-error", {
-        reason: "SDK threw auth error",
-        errorName: error instanceof Error ? error.name : "unknown",
-        errorMessage: error instanceof Error ? error.message : "unknown",
-      });
-      throw new StorageNotConfiguredError();
-    }
-
-    throw error;
+    handleBlobSdkError(`put-file:${filename}`, error);
   }
 
   return {
@@ -387,18 +470,26 @@ async function putDurableFile({
   };
 }
 
-async function readDurableFile(url?: string) {
-  if (!url) {
+async function readDurableFile(pathname?: string) {
+  if (!pathname) {
     return null;
   }
 
-  const response = await fetch(url, { cache: "no-store" });
+  try {
+    const result = await get(pathname, getBlobSdkOptions());
 
-  if (!response.ok) {
-    throw new Error(`Could not read stored file. Status ${response.status}.`);
+    if (!result || result.statusCode !== 200 || !result.stream) {
+      return null;
+    }
+
+    return Buffer.from(await new Response(result.stream).arrayBuffer());
+  } catch (error) {
+    if (error instanceof BlobNotFoundError) {
+      return null;
+    }
+
+    handleBlobSdkError(`get-file:${pathname}`, error);
   }
-
-  return Buffer.from(await response.arrayBuffer());
 }
 
 function isMemoryJob(job: ServerJobRecord): job is MemoryServerJobRecord {
@@ -430,8 +521,16 @@ export function isStorageNotConfiguredError(error: unknown) {
   return error instanceof StorageNotConfiguredError;
 }
 
+export function isStorageWriteFailedError(error: unknown) {
+  return error instanceof StorageWriteFailedError;
+}
+
 export function getStorageNotConfiguredResponseBody() {
   return { error: "Storage is not configured" };
+}
+
+export function getStorageWriteFailedResponseBody() {
+  return { error: "Storage write failed" };
 }
 
 export function logUploadStorageDiagnostics(source: string) {
@@ -460,6 +559,7 @@ export async function createServerJob(input: CreateServerJobInput) {
 
   return saveDurableJob({
     ...baseJob,
+    originalPathname: originalFile.pathname,
     originalBlobPath: originalFile.pathname,
     originalImageUrl: originalFile.url,
   });
@@ -471,29 +571,22 @@ export async function getServerJob(jobId: string) {
   }
 
   try {
-    const metadata = await head(getMetadataPath(jobId), getBlobCommandOptions());
-    const response = await fetch(metadata.url, { cache: "no-store" });
+    await head(getMetadataPath(jobId), getBlobSdkOptions());
+    const metadata = await get(getMetadataPath(jobId), getBlobSdkOptions());
 
-    if (!response.ok) {
-      throw new Error(`Could not read job metadata. Status ${response.status}.`);
+    if (!metadata || metadata.statusCode !== 200 || !metadata.stream) {
+      return null;
     }
 
-    return (await response.json()) as ServerJobRecord;
+    const metadataText = await new Response(metadata.stream).text();
+
+    return JSON.parse(metadataText) as ServerJobRecord;
   } catch (error) {
     if (error instanceof BlobNotFoundError) {
       return null;
     }
 
-    if (isBlobConfigurationError(error)) {
-      logStorageDiagnostics("server-job-store:metadata-head-auth-error", {
-        reason: "SDK threw auth error",
-        errorName: error instanceof Error ? error.name : "unknown",
-        errorMessage: error instanceof Error ? error.message : "unknown",
-      });
-      throw new StorageNotConfiguredError();
-    }
-
-    throw error;
+    handleBlobSdkError("get-metadata", error);
   }
 }
 
@@ -565,6 +658,7 @@ export async function saveServerJobPreviewSvg({
 
     job.status = "preview_ready";
     job.previewStatus = "ready";
+    job.previewPathname = previewFile?.pathname ?? job.previewPathname;
     job.previewBlobPath = previewFile?.pathname ?? job.previewBlobPath;
     job.previewSvgUrl = previewFile?.url ?? job.previewSvgUrl;
     job.svgContentType = "image/svg+xml";
@@ -600,6 +694,7 @@ export async function saveServerJobFinalSvg({
 
     job.status = "ready";
     job.finalStatus = "ready";
+    job.finalPathname = finalFile?.pathname ?? job.finalPathname;
     job.finalBlobPath = finalFile?.pathname ?? job.finalBlobPath;
     job.finalSvgUrl = finalFile?.url ?? job.finalSvgUrl;
     job.svgContentType = "image/svg+xml";
@@ -648,7 +743,7 @@ export async function getServerJobOriginalImage(job: ServerJobRecord) {
     return job.imageBuffer;
   }
 
-  return readDurableFile(job.originalImageUrl);
+  return readDurableFile(job.originalPathname ?? job.originalBlobPath);
 }
 
 export async function getServerJobPreviewSvg(job: ServerJobRecord) {
@@ -656,7 +751,7 @@ export async function getServerJobPreviewSvg(job: ServerJobRecord) {
     return job.previewSvgBuffer ?? null;
   }
 
-  return readDurableFile(job.previewSvgUrl);
+  return readDurableFile(job.previewPathname ?? job.previewBlobPath);
 }
 
 export async function getServerJobFinalSvg(job: ServerJobRecord) {
@@ -664,15 +759,23 @@ export async function getServerJobFinalSvg(job: ServerJobRecord) {
     return job.finalSvgBuffer ?? null;
   }
 
-  return readDurableFile(job.finalSvgUrl);
+  return readDurableFile(job.finalPathname ?? job.finalBlobPath);
 }
 
 export function hasServerJobPreviewSvg(job: ServerJobRecord) {
-  return Boolean(job.previewSvgUrl || (isMemoryJob(job) && job.previewSvgBuffer));
+  return Boolean(
+    job.previewPathname ||
+      job.previewBlobPath ||
+      (isMemoryJob(job) && job.previewSvgBuffer),
+  );
 }
 
 export function hasServerJobFinalSvg(job: ServerJobRecord) {
-  return Boolean(job.finalSvgUrl || (isMemoryJob(job) && job.finalSvgBuffer));
+  return Boolean(
+    job.finalPathname ||
+      job.finalBlobPath ||
+      (isMemoryJob(job) && job.finalSvgBuffer),
+  );
 }
 
 export function toJobSummary(job: ServerJobRecord): JobSummary {

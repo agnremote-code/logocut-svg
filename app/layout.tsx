@@ -13,9 +13,27 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "LogoCut SVG",
+  metadataBase: new URL("https://www.logocutsvg.com"),
+  title: "LogoCut SVG | Logo to Cricut SVG Converter",
   description:
-    "Upload a messy logo and get a clean SVG that opens and cuts properly in Cricut Design Space.",
+    "Upload a logo, preview a watermarked SVG for free, and unlock a clean Cricut-ready SVG only if it looks good.",
+  alternates: {
+    canonical: "https://www.logocutsvg.com",
+  },
+  openGraph: {
+    title: "LogoCut SVG | Logo to Cricut SVG Converter",
+    description:
+      "Upload a logo, preview a watermarked SVG for free, and unlock a clean Cricut-ready SVG only if it looks good.",
+    url: "https://www.logocutsvg.com",
+    siteName: "LogoCut SVG",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "LogoCut SVG | Logo to Cricut SVG Converter",
+    description:
+      "Upload a logo, preview a watermarked SVG for free, and unlock a clean Cricut-ready SVG only if it looks good.",
+  },
 };
 
 export default function RootLayout({

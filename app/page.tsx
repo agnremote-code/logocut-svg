@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   ChangeEvent,
   DragEvent,
@@ -16,6 +17,17 @@ import {
   JobSummary,
   MAX_FILE_SIZE,
 } from "@/lib/job-types";
+
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "LogoCut SVG",
+  description:
+    "Logo to Cricut SVG converter with free watermarked preview before payment.",
+  applicationCategory: "DesignApplication",
+  operatingSystem: "Web",
+  url: "https://www.logocutsvg.com",
+};
 
 export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -165,6 +177,10 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-[#f7f5f0] px-4 py-6 text-[#1f2520] sm:px-6 lg:px-8">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+      />
       <section className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-5xl flex-col items-center justify-center gap-8">
         <div className="max-w-3xl text-center">
           <p className="mb-3 text-sm font-semibold uppercase tracking-[0.18em] text-[#657167]">
@@ -174,8 +190,12 @@ export default function Home() {
             Logo to Cricut SVG
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-[#596158] sm:text-lg">
-            Upload a messy logo. Get a clean SVG that opens and cuts properly
-            in Cricut Design Space.
+            Upload a PNG or JPG logo. Preview before paying, and unlock a
+            clean Cricut-ready SVG only if it looks good.
+          </p>
+          <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-[#6b716b]">
+            A simple PNG to SVG and JPG to SVG workflow made for Cricut Design
+            Space.
           </p>
         </div>
 
@@ -312,7 +332,7 @@ export default function Home() {
                       <span className="flex items-start justify-between gap-4">
                         <span>
                           <span className="block text-base font-semibold text-[#172017]">
-                          {option.name}
+                            {option.name}
                           </span>
                           {option.id === "single" ? (
                             <span className="mt-2 inline-flex rounded-[8px] bg-[#315f46] px-2 py-1 text-xs font-semibold text-white">
@@ -353,6 +373,19 @@ export default function Home() {
 
         </div>
       </section>
+      <footer className="mx-auto flex w-full max-w-5xl flex-col gap-3 border-t border-[#e0dbd1] py-6 text-sm text-[#626a61] sm:flex-row sm:items-center sm:justify-between">
+        <p>
+          LogoCut SVG is an independent tool and is not affiliated with Cricut.
+        </p>
+        <nav className="flex gap-4" aria-label="Footer links">
+          <Link className="font-medium text-[#315f46] hover:text-[#264d39]" href="/privacy">
+            Privacy Policy
+          </Link>
+          <Link className="font-medium text-[#315f46] hover:text-[#264d39]" href="/terms">
+            Terms
+          </Link>
+        </nav>
+      </footer>
     </main>
   );
 }

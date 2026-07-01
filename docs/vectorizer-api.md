@@ -2,14 +2,17 @@
 
 ## Current Status
 
-Vectorizer.AI free test mode is implemented.
+Vectorizer.AI free test mode and paid production mode are implemented.
 
-The app posts uploaded images to the official Vectorizer.AI endpoint with:
+Before payment, the app posts uploaded images to the official Vectorizer.AI endpoint with:
 
 - `mode=test`
 - `output.file_format=svg`
 
-Production mode is not enabled.
+After successful Stripe payment, the app posts the same original image with:
+
+- `mode=production`
+- `output.file_format=svg`
 
 ## Official API Docs
 
@@ -51,6 +54,8 @@ mode=test
 output.file_format=svg
 ```
 
+For final SVG generation, `mode=production` is used only after payment is confirmed.
+
 ## Expected Input
 
 `vectorizeImage` accepts:
@@ -75,7 +80,7 @@ On success:
   ok: true;
   svg: Buffer;
   contentType: "image/svg+xml";
-  mode: "test";
+  mode: "test" | "production";
   creditsCalculated: string | null;
   creditsCharged: string | null;
 }

@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { getServerJob } from "@/lib/server-job-store";
+import {
+  getServerJob,
+  getServerJobFinalSvg,
+  getStorageNotConfiguredResponseBody,
+  isStorageNotConfiguredError,
+} from "@/lib/server-job-store";
 
 type RouteContext = {
   params: Promise<{
@@ -20,7 +25,19 @@ function getSafeDownloadName(fileName: string) {
 
 export async function GET(_request: Request, context: RouteContext) {
   const { jobId } = await context.params;
-  const job = getServerJob(jobId);
+  let job;
+
+  try {
+    job = await getServerJob(jobId);
+  } catch (error) {
+    if (isStorageNotConfiguredError(error)) {
+      return NextResponse.json(getStorageNotConfiguredResponseBody(), {
+        status: 503,
+      });
+    }
+
+    throw error;
+  }
 
   if (!job) {
     return NextResponse.json({ error: "Job not found." }, { status: 404 });
@@ -36,7 +53,9 @@ export async function GET(_request: Request, context: RouteContext) {
     );
   }
 
-  if (!job.finalSvgBuffer) {
+  const finalSvgBuffer = await getServerJobFinalSvg(job);
+
+  if (!finalSvgBuffer) {
     return NextResponse.json(
       {
         error: "Clean SVG is not ready yet.",
@@ -45,7 +64,7 @@ export async function GET(_request: Request, context: RouteContext) {
     );
   }
 
-  return new Response(new Uint8Array(job.finalSvgBuffer), {
+  return new Response(new Uint8Array(finalSvgBuffer), {
     headers: {
       "Content-Disposition": `attachment; filename="${getSafeDownloadName(job.fileName)}"`,
       "Content-Type": job.svgContentType ?? "image/svg+xml",

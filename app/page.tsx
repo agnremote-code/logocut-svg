@@ -147,7 +147,7 @@ export default function Home() {
       await saveClientJob({
         ...payload.job,
         imageBlob: selectedFile,
-      });
+      }).catch(() => undefined);
 
       const previewResponse = await fetch(
         `/api/jobs/${payload.job.id}/vectorize`,

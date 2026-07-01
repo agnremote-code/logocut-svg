@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import {
+  getServerJobOriginalImage,
   getServerJob,
+  getStorageNotConfiguredResponseBody,
+  hasServerJobFinalSvg,
+  hasServerJobPreviewSvg,
+  isStorageNotConfiguredError,
   saveServerJobFinalSvg,
   saveServerJobError,
   saveServerJobPreviewSvg,
@@ -17,7 +22,19 @@ type RouteContext = {
 
 export async function POST(_request: Request, context: RouteContext) {
   const { jobId } = await context.params;
-  const job = getServerJob(jobId);
+  let job;
+
+  try {
+    job = await getServerJob(jobId);
+  } catch (error) {
+    if (isStorageNotConfiguredError(error)) {
+      return NextResponse.json(getStorageNotConfiguredResponseBody(), {
+        status: 503,
+      });
+    }
+
+    throw error;
+  }
 
   if (!job) {
     return NextResponse.json({ error: "Job not found." }, { status: 404 });
@@ -25,7 +42,7 @@ export async function POST(_request: Request, context: RouteContext) {
 
   const mode = job.paymentStatus === "paid" ? "production" : "test";
 
-  if (mode === "test" && job.previewSvgBuffer) {
+  if (mode === "test" && hasServerJobPreviewSvg(job)) {
     return NextResponse.json({
       job: toJobSummary(job),
       mode: "test",
@@ -34,7 +51,7 @@ export async function POST(_request: Request, context: RouteContext) {
     });
   }
 
-  if (mode === "production" && job.finalSvgBuffer) {
+  if (mode === "production" && hasServerJobFinalSvg(job)) {
     return NextResponse.json({
       job: toJobSummary(job),
       mode: "production",
@@ -43,10 +60,29 @@ export async function POST(_request: Request, context: RouteContext) {
     });
   }
 
-  updateServerJobStatus(jobId, mode === "test" ? "previewing" : "processing");
+  try {
+    await updateServerJobStatus(jobId, mode === "test" ? "previewing" : "processing");
+  } catch (error) {
+    if (isStorageNotConfiguredError(error)) {
+      return NextResponse.json(getStorageNotConfiguredResponseBody(), {
+        status: 503,
+      });
+    }
+
+    throw error;
+  }
+
+  const imageBuffer = await getServerJobOriginalImage(job);
+
+  if (!imageBuffer) {
+    return NextResponse.json(
+      { error: "Original image is not available for this job." },
+      { status: 409 },
+    );
+  }
 
   const result = await vectorizeImage({
-    imageBuffer: job.imageBuffer,
+    imageBuffer,
     filename: job.fileName,
     cutType: job.cutType,
     contentType: job.fileType,
@@ -62,12 +98,24 @@ export async function POST(_request: Request, context: RouteContext) {
       error: result.error,
     });
 
-    const failedJob = saveServerJobError({
-      jobId,
-      error: result.error,
-      status: result.status,
-      stage: mode === "test" ? "preview" : "final",
-    });
+    let failedJob = null;
+
+    try {
+      failedJob = await saveServerJobError({
+        jobId,
+        error: result.error,
+        status: result.status,
+        stage: mode === "test" ? "preview" : "final",
+      });
+    } catch (error) {
+      if (isStorageNotConfiguredError(error)) {
+        return NextResponse.json(getStorageNotConfiguredResponseBody(), {
+          status: 503,
+        });
+      }
+
+      throw error;
+    }
 
     return NextResponse.json(
       {
@@ -85,13 +133,13 @@ export async function POST(_request: Request, context: RouteContext) {
 
   const readyJob =
     mode === "test"
-      ? saveServerJobPreviewSvg({
+      ? await saveServerJobPreviewSvg({
           jobId,
           svgBuffer: result.svg,
           creditsCalculated: result.creditsCalculated,
           creditsCharged: result.creditsCharged,
         })
-      : saveServerJobFinalSvg({
+      : await saveServerJobFinalSvg({
           jobId,
           svgBuffer: result.svg,
           creditsCalculated: result.creditsCalculated,

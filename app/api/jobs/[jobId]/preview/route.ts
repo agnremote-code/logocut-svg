@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { getServerJob } from "@/lib/server-job-store";
+import {
+  getServerJob,
+  getServerJobPreviewSvg,
+  getStorageNotConfiguredResponseBody,
+  isStorageNotConfiguredError,
+} from "@/lib/server-job-store";
 
 type RouteContext = {
   params: Promise<{
@@ -9,7 +14,19 @@ type RouteContext = {
 
 export async function GET(_request: Request, context: RouteContext) {
   const { jobId } = await context.params;
-  const job = getServerJob(jobId);
+  let job;
+
+  try {
+    job = await getServerJob(jobId);
+  } catch (error) {
+    if (isStorageNotConfiguredError(error)) {
+      return NextResponse.json(getStorageNotConfiguredResponseBody(), {
+        status: 503,
+      });
+    }
+
+    throw error;
+  }
 
   if (!job) {
     return NextResponse.json({ error: "Job not found." }, { status: 404 });
@@ -24,7 +41,9 @@ export async function GET(_request: Request, context: RouteContext) {
     );
   }
 
-  if (!job.previewSvgBuffer) {
+  const previewSvgBuffer = await getServerJobPreviewSvg(job);
+
+  if (!previewSvgBuffer) {
     return NextResponse.json(
       {
         error: "Preview is not ready yet.",
@@ -33,7 +52,7 @@ export async function GET(_request: Request, context: RouteContext) {
     );
   }
 
-  return new Response(new Uint8Array(job.previewSvgBuffer), {
+  return new Response(new Uint8Array(previewSvgBuffer), {
     headers: {
       "Content-Type": job.svgContentType ?? "image/svg+xml",
     },

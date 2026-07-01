@@ -5,23 +5,23 @@ LogoCut SVG is a Next.js MVP for turning uploaded PNG or JPG logos into Cricut-r
 The current product flow is:
 
 1. Upload a logo.
-2. Review deterministic quality warnings.
-3. Choose a cut type.
-4. Pay with Stripe Checkout.
-5. Process the image with Vectorizer.AI in test mode.
-6. Preview and download the returned SVG.
+2. Create a free watermarked SVG preview with Vectorizer.AI test mode.
+3. Review the preview before paying.
+4. Unlock the clean SVG with Stripe Checkout.
+5. Process the image with Vectorizer.AI production mode after payment.
+6. Preview and download the final SVG.
 
 ## What The App Does
 
 - Accepts PNG, JPG, and JPEG logos under 10 MB.
-- Runs a client-side pre-flight quality check.
 - Recommends single-color or multi-color cut mode.
+- Stores job metadata and files durably when Vercel storage is configured.
+- Creates a free watermarked SVG preview before checkout.
 - Creates one-time Stripe Checkout sessions.
-- Blocks Vectorizer.AI until payment is confirmed.
-- Sends paid jobs to Vectorizer.AI with `mode=test`.
+- Runs clean SVG generation only after payment is confirmed.
 - Shows a result page with SVG preview and download.
 
-The app does not include user accounts, subscriptions, dashboards, or persistent production storage yet.
+The app does not include user accounts, subscriptions, or dashboards.
 
 ## Local Setup
 
@@ -39,13 +39,16 @@ cp .env.local.example .env.local
 
 Fill in the required values in `.env.local`.
 
-## Required Environment Variables
+## Environment Variables
 
 ```bash
 VECTORIZER_API_ID="your-api-id"
 VECTORIZER_API_SECRET="your-api-secret"
 STRIPE_SECRET_KEY="sk_test_your-stripe-secret-key"
 STRIPE_WEBHOOK_SECRET="whsec_your-stripe-webhook-secret"
+
+# Optional for local durable Blob testing.
+BLOB_READ_WRITE_TOKEN="vercel-blob-read-write-token"
 ```
 
 Notes:
@@ -53,7 +56,12 @@ Notes:
 - `VECTORIZER_API_ID` and `VECTORIZER_API_SECRET` come from Vectorizer.AI.
 - `STRIPE_SECRET_KEY` should be a Stripe test key for this MVP.
 - `STRIPE_WEBHOOK_SECRET` is required for signed webhook handling in deployed environments.
+- Vercel Blob stores uploaded images, generated SVG files, and job metadata JSON.
+- For local durable Blob testing, use `BLOB_READ_WRITE_TOKEN`.
+- In Vercel, a connected Blob store can provide `BLOB_STORE_ID` through system environment variables and the Blob SDK uses Vercel OIDC automatically; `BLOB_READ_WRITE_TOKEN` is optional in that setup.
 - Do not commit real `.env.local` values.
+- Local development can fall back to in-memory storage when no Blob env vars are present.
+- Production fails clearly with `Storage is not configured` if durable storage is missing.
 
 ## Run Locally
 
@@ -86,10 +94,9 @@ Stripe:
 
 Vectorizer.AI:
 
-- The app currently sends `mode=test`.
-- Test-mode SVGs may contain a watermark.
-- The result page clearly displays `TEST MODE`.
-- Vectorizer production mode is intentionally not enabled yet.
+- The app sends `mode=test` before payment to create the watermarked preview.
+- Test-mode SVGs may contain a watermark and the UI displays `TEST MODE`.
+- After successful payment, the app sends `mode=production` to generate the clean SVG.
 
 ## Internal Testing
 

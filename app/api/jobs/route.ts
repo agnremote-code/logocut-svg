@@ -4,7 +4,12 @@ import {
   isCutType,
   validateCreateJobRequest,
 } from "@/lib/job-types";
-import { createServerJob, toJobSummary } from "@/lib/server-job-store";
+import {
+  createServerJob,
+  getStorageNotConfiguredResponseBody,
+  isStorageNotConfiguredError,
+  toJobSummary,
+} from "@/lib/server-job-store";
 
 export async function POST(request: Request) {
   let formData: FormData;
@@ -49,15 +54,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: validationError }, { status: 400 });
   }
 
-  // The image bytes are available here for the future Vectorizer worker:
-  // await vectorizeImage({ imageBuffer, filename: image.name, cutType });
-  const job = createServerJob({
-    fileName: image.name,
-    fileType: image.type,
-    fileSize: imageBuffer.byteLength,
-    cutType,
-    imageBuffer,
-  });
+  let job;
+
+  try {
+    job = await createServerJob({
+      fileName: image.name,
+      fileType: image.type,
+      fileSize: imageBuffer.byteLength,
+      cutType,
+      imageBuffer,
+    });
+  } catch (error) {
+    if (isStorageNotConfiguredError(error)) {
+      return NextResponse.json(getStorageNotConfiguredResponseBody(), {
+        status: 503,
+      });
+    }
+
+    throw error;
+  }
 
   return NextResponse.json({ job: toJobSummary(job) }, { status: 201 });
 }

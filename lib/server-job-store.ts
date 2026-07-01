@@ -1,27 +1,47 @@
+import { BlobError, BlobNotFoundError, head, put } from "@vercel/blob";
 import {
   CutType,
   JobStatus,
   JobSummary,
   PaymentStatus,
 } from "@/lib/job-types";
+import { getCutPrice } from "@/lib/pricing";
 
-type ServerJobRecord = JobSummary & {
-  imageBuffer: Buffer;
+type VectorizerMode = "test" | "production";
+type StoredFileStatus = "not_started" | "processing" | "ready" | "failed";
+
+export type ServerJobRecord = JobSummary & {
+  jobId: string;
+  price: string;
   paymentStatus: PaymentStatus;
-  checkoutSessionId?: string;
-  paidAt?: string;
-  previewSvgBuffer?: Buffer;
-  finalSvgBuffer?: Buffer;
-  svgContentType?: "image/svg+xml";
-  previewError?: string;
-  previewStatus?: number;
-  finalError?: string;
-  finalStatus?: number;
-  vectorizerError?: string;
-  vectorizerStatus?: number;
-  vectorizerMode?: "test" | "production";
+  previewStatus: StoredFileStatus;
+  finalStatus: StoredFileStatus;
+  vectorizerMode?: VectorizerMode;
   creditsCalculated?: string | null;
   creditsCharged?: string | null;
+  checkoutSessionId?: string;
+  paidAt?: string;
+  originalBlobPath?: string;
+  originalImageUrl?: string;
+  previewBlobPath?: string;
+  previewSvgUrl?: string;
+  finalBlobPath?: string;
+  finalSvgUrl?: string;
+  svgContentType?: "image/svg+xml";
+  previewError?: string;
+  previewHttpStatus?: number;
+  finalError?: string;
+  finalHttpStatus?: number;
+  vectorizerError?: string;
+  vectorizerStatus?: number;
+  errorMessages: string[];
+  updatedAt: string;
+};
+
+type MemoryServerJobRecord = ServerJobRecord & {
+  imageBuffer: Buffer;
+  previewSvgBuffer?: Buffer;
+  finalSvgBuffer?: Buffer;
 };
 
 type CreateServerJobInput = {
@@ -32,165 +52,407 @@ type CreateServerJobInput = {
   imageBuffer: Buffer;
 };
 
-const serverJobStore = globalThis as typeof globalThis & {
-  logoCutJobs?: Map<string, ServerJobRecord>;
+type SaveSvgInput = {
+  jobId: string;
+  svgBuffer: Buffer;
+  creditsCalculated: string | null;
+  creditsCharged: string | null;
 };
 
-function getJobs() {
+export class StorageNotConfiguredError extends Error {
+  constructor() {
+    super("Storage is not configured");
+    this.name = "StorageNotConfiguredError";
+  }
+}
+
+const serverJobStore = globalThis as typeof globalThis & {
+  logoCutJobs?: Map<string, MemoryServerJobRecord>;
+};
+
+function getMemoryJobs() {
   if (!serverJobStore.logoCutJobs) {
-    serverJobStore.logoCutJobs = new Map<string, ServerJobRecord>();
+    serverJobStore.logoCutJobs = new Map<string, MemoryServerJobRecord>();
   }
 
   return serverJobStore.logoCutJobs;
 }
 
-export function createServerJob(input: CreateServerJobInput) {
-  const job: ServerJobRecord = {
-    id: crypto.randomUUID(),
+function hasBlobReadWriteToken() {
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN?.trim());
+}
+
+function hasBlobStoreId() {
+  return Boolean(process.env.BLOB_STORE_ID?.trim());
+}
+
+function hasAnyBlobEnvironment() {
+  return hasBlobReadWriteToken() || hasBlobStoreId();
+}
+
+function hasDurableStorageConfig() {
+  return hasAnyBlobEnvironment();
+}
+
+function shouldUseMemoryStorage() {
+  return process.env.NODE_ENV !== "production" && !hasAnyBlobEnvironment();
+}
+
+function assertDurableStorageConfigured() {
+  if (!hasDurableStorageConfig()) {
+    throw new StorageNotConfiguredError();
+  }
+}
+
+function getBlobCommandOptions() {
+  const storeId = process.env.BLOB_STORE_ID?.trim();
+  const oidcToken = process.env.VERCEL_OIDC_TOKEN?.trim();
+
+  return {
+    ...(storeId ? { storeId } : {}),
+    ...(oidcToken ? { oidcToken } : {}),
+  };
+}
+
+function isBlobConfigurationError(error: unknown) {
+  if (error instanceof StorageNotConfiguredError) {
+    return true;
+  }
+
+  if (!(error instanceof BlobError)) {
+    return false;
+  }
+
+  return /credentials|token|store|auth|access/i.test(error.message);
+}
+
+function getJobFolder(jobId: string) {
+  return `jobs/${jobId}`;
+}
+
+function getMetadataPath(jobId: string) {
+  return `${getJobFolder(jobId)}/metadata.json`;
+}
+
+function getOriginalFileName(input: Pick<CreateServerJobInput, "fileName" | "fileType">) {
+  if (input.fileType === "image/png") {
+    return "original.png";
+  }
+
+  if (input.fileType === "image/jpeg") {
+    const extension = input.fileName.toLowerCase().endsWith(".jpeg")
+      ? "jpeg"
+      : "jpg";
+
+    return `original.${extension}`;
+  }
+
+  const extension = input.fileName.split(".").pop()?.toLowerCase();
+  return extension ? `original.${extension}` : "original";
+}
+
+function createBaseJob(input: CreateServerJobInput): ServerJobRecord {
+  const jobId = crypto.randomUUID();
+  const now = new Date().toISOString();
+
+  return {
+    id: jobId,
+    jobId,
     fileName: input.fileName,
     fileType: input.fileType,
     fileSize: input.fileSize,
     cutType: input.cutType,
-    imageBuffer: input.imageBuffer,
-    createdAt: new Date().toISOString(),
+    price: getCutPrice(input.cutType).label,
+    createdAt: now,
+    updatedAt: now,
     status: "created",
     paymentStatus: "unpaid",
+    previewStatus: "not_started",
+    finalStatus: "not_started",
+    errorMessages: [],
   };
+}
 
-  getJobs().set(job.id, job);
+async function saveDurableJob(job: ServerJobRecord) {
+  assertDurableStorageConfigured();
+
+  try {
+    await put(getMetadataPath(job.id), JSON.stringify(job, null, 2), {
+      access: "public",
+      contentType: "application/json",
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      ...getBlobCommandOptions(),
+    });
+  } catch (error) {
+    if (isBlobConfigurationError(error)) {
+      throw new StorageNotConfiguredError();
+    }
+
+    throw error;
+  }
 
   return job;
 }
 
-export function getServerJob(jobId: string) {
-  return getJobs().get(jobId) ?? null;
+async function putDurableFile({
+  jobId,
+  filename,
+  body,
+  contentType,
+}: {
+  jobId: string;
+  filename: string;
+  body: Buffer;
+  contentType: string;
+}) {
+  assertDurableStorageConfigured();
+
+  const pathname = `jobs/${jobId}/${filename}`;
+  let blob;
+
+  try {
+    blob = await put(pathname, body, {
+      access: "public",
+      contentType,
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      ...getBlobCommandOptions(),
+    });
+  } catch (error) {
+    if (isBlobConfigurationError(error)) {
+      throw new StorageNotConfiguredError();
+    }
+
+    throw error;
+  }
+
+  return {
+    pathname: blob.pathname,
+    url: blob.url,
+  };
 }
 
-export function saveCheckoutSession({
+async function readDurableFile(url?: string) {
+  if (!url) {
+    return null;
+  }
+
+  const response = await fetch(url, { cache: "no-store" });
+
+  if (!response.ok) {
+    throw new Error(`Could not read stored file. Status ${response.status}.`);
+  }
+
+  return Buffer.from(await response.arrayBuffer());
+}
+
+function isMemoryJob(job: ServerJobRecord): job is MemoryServerJobRecord {
+  return "imageBuffer" in job && Buffer.isBuffer(job.imageBuffer);
+}
+
+async function updateServerJob(
+  jobId: string,
+  update: (job: ServerJobRecord) => void,
+) {
+  const job = await getServerJob(jobId);
+
+  if (!job) {
+    return null;
+  }
+
+  update(job);
+  job.updatedAt = new Date().toISOString();
+
+  if (shouldUseMemoryStorage() && isMemoryJob(job)) {
+    getMemoryJobs().set(jobId, job);
+    return job;
+  }
+
+  return saveDurableJob(job);
+}
+
+export function isStorageNotConfiguredError(error: unknown) {
+  return error instanceof StorageNotConfiguredError;
+}
+
+export function getStorageNotConfiguredResponseBody() {
+  return { error: "Storage is not configured" };
+}
+
+export async function createServerJob(input: CreateServerJobInput) {
+  const baseJob = createBaseJob(input);
+
+  if (shouldUseMemoryStorage()) {
+    const job: MemoryServerJobRecord = {
+      ...baseJob,
+      imageBuffer: input.imageBuffer,
+    };
+
+    getMemoryJobs().set(job.id, job);
+    return job;
+  }
+
+  const originalFile = await putDurableFile({
+    jobId: baseJob.id,
+    filename: getOriginalFileName(input),
+    body: input.imageBuffer,
+    contentType: input.fileType,
+  });
+
+  return saveDurableJob({
+    ...baseJob,
+    originalBlobPath: originalFile.pathname,
+    originalImageUrl: originalFile.url,
+  });
+}
+
+export async function getServerJob(jobId: string) {
+  if (shouldUseMemoryStorage()) {
+    return getMemoryJobs().get(jobId) ?? null;
+  }
+
+  assertDurableStorageConfigured();
+
+  try {
+    const metadata = await head(getMetadataPath(jobId), getBlobCommandOptions());
+    const response = await fetch(metadata.url, { cache: "no-store" });
+
+    if (!response.ok) {
+      throw new Error(`Could not read job metadata. Status ${response.status}.`);
+    }
+
+    return (await response.json()) as ServerJobRecord;
+  } catch (error) {
+    if (error instanceof BlobNotFoundError) {
+      return null;
+    }
+
+    if (isBlobConfigurationError(error)) {
+      throw new StorageNotConfiguredError();
+    }
+
+    throw error;
+  }
+}
+
+export async function saveCheckoutSession({
   jobId,
   checkoutSessionId,
 }: {
   jobId: string;
   checkoutSessionId: string;
 }) {
-  const job = getServerJob(jobId);
-
-  if (!job) {
-    return null;
-  }
-
-  job.checkoutSessionId = checkoutSessionId;
-  job.paymentStatus = "unpaid";
-  job.status = "awaiting_payment";
-  getJobs().set(jobId, job);
-
-  return job;
+  return updateServerJob(jobId, (job) => {
+    job.checkoutSessionId = checkoutSessionId;
+    job.paymentStatus = "unpaid";
+    job.status = "awaiting_payment";
+  });
 }
 
-export function markServerJobPaid({
+export async function markServerJobPaid({
   jobId,
   checkoutSessionId,
 }: {
   jobId: string;
   checkoutSessionId: string;
 }) {
-  const job = getServerJob(jobId);
+  return updateServerJob(jobId, (job) => {
+    job.checkoutSessionId = checkoutSessionId;
+    job.paymentStatus = "paid";
+    job.paidAt = new Date().toISOString();
 
-  if (!job) {
-    return null;
-  }
-
-  job.checkoutSessionId = checkoutSessionId;
-  job.paymentStatus = "paid";
-  job.paidAt = new Date().toISOString();
-
-  if (job.status === "awaiting_payment" || job.status === "preview_ready") {
-    job.status = "created";
-  }
-
-  getJobs().set(jobId, job);
-
-  return job;
+    if (job.status === "awaiting_payment" || job.status === "preview_ready") {
+      job.status = "created";
+    }
+  });
 }
 
-export function updateServerJobStatus(jobId: string, status: JobStatus) {
-  const job = getServerJob(jobId);
+export async function updateServerJobStatus(jobId: string, status: JobStatus) {
+  return updateServerJob(jobId, (job) => {
+    job.status = status;
 
-  if (!job) {
-    return null;
-  }
+    if (status === "previewing") {
+      job.previewStatus = "processing";
+    }
 
-  job.status = status;
-  getJobs().set(jobId, job);
-
-  return job;
+    if (status === "processing") {
+      job.finalStatus = "processing";
+    }
+  });
 }
 
-export function saveServerJobPreviewSvg({
+export async function saveServerJobPreviewSvg({
   jobId,
   svgBuffer,
   creditsCalculated,
   creditsCharged,
-}: {
-  jobId: string;
-  svgBuffer: Buffer;
-  creditsCalculated: string | null;
-  creditsCharged: string | null;
-}) {
-  const job = getServerJob(jobId);
+}: SaveSvgInput) {
+  const previewFile = shouldUseMemoryStorage()
+    ? undefined
+    : await putDurableFile({
+        jobId,
+        filename: "preview.svg",
+        body: svgBuffer,
+        contentType: "image/svg+xml",
+      });
 
-  if (!job) {
-    return null;
-  }
+  return updateServerJob(jobId, (job) => {
+    if (isMemoryJob(job)) {
+      job.previewSvgBuffer = svgBuffer;
+    }
 
-  job.status = "preview_ready";
-  job.previewSvgBuffer = svgBuffer;
-  job.svgContentType = "image/svg+xml";
-  job.vectorizerMode = "test";
-  job.previewError = undefined;
-  job.previewStatus = undefined;
-  job.creditsCalculated = creditsCalculated;
-  job.creditsCharged = creditsCharged;
-  job.vectorizerError = undefined;
-  job.vectorizerStatus = undefined;
-  getJobs().set(jobId, job);
-
-  return job;
+    job.status = "preview_ready";
+    job.previewStatus = "ready";
+    job.previewBlobPath = previewFile?.pathname ?? job.previewBlobPath;
+    job.previewSvgUrl = previewFile?.url ?? job.previewSvgUrl;
+    job.svgContentType = "image/svg+xml";
+    job.vectorizerMode = "test";
+    job.previewError = undefined;
+    job.previewHttpStatus = undefined;
+    job.creditsCalculated = creditsCalculated;
+    job.creditsCharged = creditsCharged;
+    job.vectorizerError = undefined;
+    job.vectorizerStatus = undefined;
+  });
 }
 
-export function saveServerJobFinalSvg({
+export async function saveServerJobFinalSvg({
   jobId,
   svgBuffer,
   creditsCalculated,
   creditsCharged,
-}: {
-  jobId: string;
-  svgBuffer: Buffer;
-  creditsCalculated: string | null;
-  creditsCharged: string | null;
-}) {
-  const job = getServerJob(jobId);
+}: SaveSvgInput) {
+  const finalFile = shouldUseMemoryStorage()
+    ? undefined
+    : await putDurableFile({
+        jobId,
+        filename: "final.svg",
+        body: svgBuffer,
+        contentType: "image/svg+xml",
+      });
 
-  if (!job) {
-    return null;
-  }
+  return updateServerJob(jobId, (job) => {
+    if (isMemoryJob(job)) {
+      job.finalSvgBuffer = svgBuffer;
+    }
 
-  job.status = "ready";
-  job.finalSvgBuffer = svgBuffer;
-  job.svgContentType = "image/svg+xml";
-  job.vectorizerMode = "production";
-  job.finalError = undefined;
-  job.finalStatus = undefined;
-  job.creditsCalculated = creditsCalculated;
-  job.creditsCharged = creditsCharged;
-  job.vectorizerError = undefined;
-  job.vectorizerStatus = undefined;
-  getJobs().set(jobId, job);
-
-  return job;
+    job.status = "ready";
+    job.finalStatus = "ready";
+    job.finalBlobPath = finalFile?.pathname ?? job.finalBlobPath;
+    job.finalSvgUrl = finalFile?.url ?? job.finalSvgUrl;
+    job.svgContentType = "image/svg+xml";
+    job.vectorizerMode = "production";
+    job.finalError = undefined;
+    job.finalHttpStatus = undefined;
+    job.creditsCalculated = creditsCalculated;
+    job.creditsCharged = creditsCharged;
+    job.vectorizerError = undefined;
+    job.vectorizerStatus = undefined;
+  });
 }
 
-export function saveServerJobError({
+export async function saveServerJobError({
   jobId,
   error,
   status,
@@ -201,25 +463,55 @@ export function saveServerJobError({
   status?: number;
   stage?: "preview" | "final";
 }) {
-  const job = getServerJob(jobId);
+  return updateServerJob(jobId, (job) => {
+    job.status = "failed";
+    job.errorMessages = Array.from(new Set([...job.errorMessages, error]));
 
-  if (!job) {
-    return null;
+    if (stage === "preview") {
+      job.previewStatus = "failed";
+      job.previewError = error;
+      job.previewHttpStatus = status;
+    } else {
+      job.finalStatus = "failed";
+      job.finalError = error;
+      job.finalHttpStatus = status;
+    }
+
+    job.vectorizerError = error;
+    job.vectorizerStatus = status;
+  });
+}
+
+export async function getServerJobOriginalImage(job: ServerJobRecord) {
+  if (isMemoryJob(job)) {
+    return job.imageBuffer;
   }
 
-  job.status = "failed";
-  if (stage === "preview") {
-    job.previewError = error;
-    job.previewStatus = status;
-  } else {
-    job.finalError = error;
-    job.finalStatus = status;
-  }
-  job.vectorizerError = error;
-  job.vectorizerStatus = status;
-  getJobs().set(jobId, job);
+  return readDurableFile(job.originalImageUrl);
+}
 
-  return job;
+export async function getServerJobPreviewSvg(job: ServerJobRecord) {
+  if (isMemoryJob(job)) {
+    return job.previewSvgBuffer ?? null;
+  }
+
+  return readDurableFile(job.previewSvgUrl);
+}
+
+export async function getServerJobFinalSvg(job: ServerJobRecord) {
+  if (isMemoryJob(job)) {
+    return job.finalSvgBuffer ?? null;
+  }
+
+  return readDurableFile(job.finalSvgUrl);
+}
+
+export function hasServerJobPreviewSvg(job: ServerJobRecord) {
+  return Boolean(job.previewSvgUrl || (isMemoryJob(job) && job.previewSvgBuffer));
+}
+
+export function hasServerJobFinalSvg(job: ServerJobRecord) {
+  return Boolean(job.finalSvgUrl || (isMemoryJob(job) && job.finalSvgBuffer));
 }
 
 export function toJobSummary(job: ServerJobRecord): JobSummary {

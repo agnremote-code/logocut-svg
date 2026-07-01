@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { getCutPrice } from "@/lib/pricing";
 import {
   getServerJob,
+  getStorageNotConfiguredResponseBody,
+  hasServerJobPreviewSvg,
+  isStorageNotConfiguredError,
   saveCheckoutSession,
   toJobSummary,
 } from "@/lib/server-job-store";
@@ -26,7 +29,19 @@ function getRequestOrigin(request: Request) {
 
 export async function POST(request: Request, context: RouteContext) {
   const { jobId } = await context.params;
-  const job = getServerJob(jobId);
+  let job;
+
+  try {
+    job = await getServerJob(jobId);
+  } catch (error) {
+    if (isStorageNotConfiguredError(error)) {
+      return NextResponse.json(getStorageNotConfiguredResponseBody(), {
+        status: 503,
+      });
+    }
+
+    throw error;
+  }
 
   if (!job) {
     return NextResponse.json({ error: "Job not found." }, { status: 404 });
@@ -39,7 +54,7 @@ export async function POST(request: Request, context: RouteContext) {
     );
   }
 
-  if (!job.previewSvgBuffer) {
+  if (!hasServerJobPreviewSvg(job)) {
     return NextResponse.json(
       { error: "Create a preview before checkout." },
       { status: 409 },
@@ -78,7 +93,7 @@ export async function POST(request: Request, context: RouteContext) {
       throw new Error("Stripe did not return a Checkout URL.");
     }
 
-    const updatedJob = saveCheckoutSession({
+    const updatedJob = await saveCheckoutSession({
       jobId: job.id,
       checkoutSessionId: session.id,
     });
@@ -88,6 +103,12 @@ export async function POST(request: Request, context: RouteContext) {
       job: updatedJob ? toJobSummary(updatedJob) : toJobSummary(job),
     });
   } catch (error) {
+    if (isStorageNotConfiguredError(error)) {
+      return NextResponse.json(getStorageNotConfiguredResponseBody(), {
+        status: 503,
+      });
+    }
+
     const message =
       error instanceof Error
         ? error.message

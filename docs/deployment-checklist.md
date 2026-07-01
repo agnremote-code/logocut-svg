@@ -23,8 +23,10 @@ STRIPE_WEBHOOK_SECRET
 For the current MVP:
 
 - Use Stripe test keys.
-- Keep Vectorizer.AI in test mode.
-- Do not enable production vectorization billing yet.
+- Use Vectorizer.AI test mode for the free preview.
+- Use Vectorizer.AI production mode only after successful payment.
+- Connect Vercel Blob for uploaded images, generated SVG files, and job metadata JSON.
+- Confirm the project has either `BLOB_STORE_ID` from Vercel system environment variables with OIDC enabled or `BLOB_READ_WRITE_TOKEN` configured.
 
 ## Stripe Live Keys Later
 
@@ -39,10 +41,7 @@ Before accepting real customer payments:
 
 Before charging for production SVG output:
 
-- Change the Vectorizer request from `mode=test` only after validating cost and output quality.
 - Confirm expected cost per image.
-- Add durable storage for original uploads and generated SVGs.
-- Add durable job records instead of relying on the in-memory job store.
 - Add retry and failure handling around Vectorizer.AI.
 
 ## Domain Setup

@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import {
   getServerJob,
+  getServerJobOriginalImage,
   getStorageNotConfiguredResponseBody,
-  hasServerJobFinalSvg,
-  hasServerJobPreviewSvg,
   isStorageNotConfiguredError,
-  toJobSummary,
 } from "@/lib/server-job-store";
 
 type RouteContext = {
@@ -34,18 +32,18 @@ export async function GET(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Job not found." }, { status: 404 });
   }
 
-  return NextResponse.json({
-    job: toJobSummary(job),
-    previewReady: hasServerJobPreviewSvg(job),
-    svgReady: hasServerJobFinalSvg(job),
-    paymentStatus: job.paymentStatus,
-    checkoutSessionId: job.checkoutSessionId ?? null,
-    vectorizerMode: job.vectorizerMode ?? null,
-    previewError: job.previewError ?? null,
-    finalError: job.finalError ?? null,
-    vectorizerError: job.vectorizerError ?? null,
-    vectorizerStatus: job.vectorizerStatus ?? null,
-    creditsCalculated: job.creditsCalculated ?? null,
-    creditsCharged: job.creditsCharged ?? null,
+  const imageBuffer = await getServerJobOriginalImage(job);
+
+  if (!imageBuffer) {
+    return NextResponse.json(
+      { error: "Original image is not available." },
+      { status: 409 },
+    );
+  }
+
+  return new Response(new Uint8Array(imageBuffer), {
+    headers: {
+      "Content-Type": job.fileType,
+    },
   });
 }

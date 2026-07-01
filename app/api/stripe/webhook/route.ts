@@ -1,7 +1,11 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
-import { markServerJobPaid } from "@/lib/server-job-store";
+import {
+  getStorageNotConfiguredResponseBody,
+  isStorageNotConfiguredError,
+  markServerJobPaid,
+} from "@/lib/server-job-store";
 import { getStripe } from "@/lib/stripe";
 
 export async function POST(request: Request) {
@@ -46,10 +50,20 @@ export async function POST(request: Request) {
       session.metadata?.jobId &&
       session.id
     ) {
-      markServerJobPaid({
-        jobId: session.metadata.jobId,
-        checkoutSessionId: session.id,
-      });
+      try {
+        await markServerJobPaid({
+          jobId: session.metadata.jobId,
+          checkoutSessionId: session.id,
+        });
+      } catch (error) {
+        if (isStorageNotConfiguredError(error)) {
+          return NextResponse.json(getStorageNotConfiguredResponseBody(), {
+            status: 503,
+          });
+        }
+
+        throw error;
+      }
     }
   }
 

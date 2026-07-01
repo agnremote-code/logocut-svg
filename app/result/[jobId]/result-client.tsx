@@ -31,7 +31,10 @@ export default function ResultClient({ jobId }: ResultClientProps) {
   const [creditsCharged, setCreditsCharged] = useState<string | null>(null);
 
   const selectedCut = useMemo(
-    () => CUT_OPTIONS.find((option) => option.id === (job?.cutType ?? serverJob?.cutType)),
+    () =>
+      CUT_OPTIONS.find(
+        (option) => option.id === (job?.cutType ?? serverJob?.cutType),
+      ),
     [job?.cutType, serverJob?.cutType],
   );
 
@@ -39,6 +42,7 @@ export default function ResultClient({ jobId }: ResultClientProps) {
     let isMounted = true;
 
     getClientJob(jobId)
+      .catch(() => null)
       .then(async (storedJob) => {
         if (!isMounted) {
           return;
@@ -114,6 +118,7 @@ export default function ResultClient({ jobId }: ResultClientProps) {
 
   const svgResultUrl = `/api/jobs/${jobId}/result`;
   const svgPreviewUrl = `/api/jobs/${jobId}/preview`;
+  const originalImageUrl = serverJob ? `/api/jobs/${jobId}/original` : previewUrl;
   const displayFileName = serverJob?.fileName ?? job?.fileName ?? "Uploaded logo";
   const downloadFileName = `${displayFileName.replace(/\.[^.]+$/, "")}-logocut.svg`;
   const unlockLabel =
@@ -175,8 +180,7 @@ export default function ResultClient({ jobId }: ResultClientProps) {
               We could not find this upload
             </h1>
             <p className="mt-4 text-sm leading-6 text-[#626a61]">
-              The current MVP stores previews in this browser while the real
-              storage layer is still offline.
+              This result may have expired or the upload could not be found.
             </p>
             <button
               className="mt-6 h-11 rounded-[8px] bg-[#315f46] px-5 text-sm font-semibold text-white transition hover:bg-[#264d39]"
@@ -224,12 +228,12 @@ export default function ResultClient({ jobId }: ResultClientProps) {
             </div>
 
             <div className="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-[8px] border border-[#e0dbd1] bg-[#fbfaf7]">
-              {previewUrl ? (
+              {originalImageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   alt="Original uploaded logo"
                   className="h-full w-full object-contain p-5"
-                  src={previewUrl}
+                  src={originalImageUrl}
                 />
               ) : (
                 <p className="text-sm font-medium text-[#626a61]">

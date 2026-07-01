@@ -49,6 +49,7 @@ export default function ProcessingClient({
     let isMounted = true;
 
     getClientJob(jobId)
+      .catch(() => null)
       .then(async (storedJob) => {
         if (!isMounted) {
           return;
@@ -221,8 +222,7 @@ export default function ProcessingClient({
               Start with a logo upload
             </h1>
             <p className="mt-4 text-sm leading-6 text-[#626a61]">
-              This processing page needs the original image from this browser
-              session.
+              This upload could not be found. Please start with a new logo.
             </p>
             <button
               className="mt-6 h-11 rounded-[8px] bg-[#315f46] px-5 text-sm font-semibold text-white transition hover:bg-[#264d39]"

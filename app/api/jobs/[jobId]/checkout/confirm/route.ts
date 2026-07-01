@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import {
   getServerJob,
+  getStorageNotConfiguredResponseBody,
+  isStorageNotConfiguredError,
   markServerJobPaid,
   toJobSummary,
 } from "@/lib/server-job-store";
@@ -14,7 +16,19 @@ type RouteContext = {
 
 export async function POST(request: Request, context: RouteContext) {
   const { jobId } = await context.params;
-  const job = getServerJob(jobId);
+  let job;
+
+  try {
+    job = await getServerJob(jobId);
+  } catch (error) {
+    if (isStorageNotConfiguredError(error)) {
+      return NextResponse.json(getStorageNotConfiguredResponseBody(), {
+        status: 503,
+      });
+    }
+
+    throw error;
+  }
 
   if (!job) {
     return NextResponse.json({ error: "Job not found." }, { status: 404 });
@@ -64,7 +78,7 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    const paidJob = markServerJobPaid({
+    const paidJob = await markServerJobPaid({
       jobId: job.id,
       checkoutSessionId: session.id,
     });
@@ -74,6 +88,12 @@ export async function POST(request: Request, context: RouteContext) {
       paymentStatus: "paid",
     });
   } catch (error) {
+    if (isStorageNotConfiguredError(error)) {
+      return NextResponse.json(getStorageNotConfiguredResponseBody(), {
+        status: 503,
+      });
+    }
+
     const message =
       error instanceof Error
         ? error.message

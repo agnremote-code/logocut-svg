@@ -10,11 +10,16 @@ type ServerJobRecord = JobSummary & {
   paymentStatus: PaymentStatus;
   checkoutSessionId?: string;
   paidAt?: string;
-  svgBuffer?: Buffer;
+  previewSvgBuffer?: Buffer;
+  finalSvgBuffer?: Buffer;
   svgContentType?: "image/svg+xml";
+  previewError?: string;
+  previewStatus?: number;
+  finalError?: string;
+  finalStatus?: number;
   vectorizerError?: string;
   vectorizerStatus?: number;
-  vectorizerMode?: "test";
+  vectorizerMode?: "test" | "production";
   creditsCalculated?: string | null;
   creditsCharged?: string | null;
 };
@@ -48,7 +53,7 @@ export function createServerJob(input: CreateServerJobInput) {
     cutType: input.cutType,
     imageBuffer: input.imageBuffer,
     createdAt: new Date().toISOString(),
-    status: "awaiting_payment",
+    status: "created",
     paymentStatus: "unpaid",
   };
 
@@ -99,7 +104,7 @@ export function markServerJobPaid({
   job.paymentStatus = "paid";
   job.paidAt = new Date().toISOString();
 
-  if (job.status === "awaiting_payment") {
+  if (job.status === "awaiting_payment" || job.status === "preview_ready") {
     job.status = "created";
   }
 
@@ -121,7 +126,39 @@ export function updateServerJobStatus(jobId: string, status: JobStatus) {
   return job;
 }
 
-export function saveServerJobSvg({
+export function saveServerJobPreviewSvg({
+  jobId,
+  svgBuffer,
+  creditsCalculated,
+  creditsCharged,
+}: {
+  jobId: string;
+  svgBuffer: Buffer;
+  creditsCalculated: string | null;
+  creditsCharged: string | null;
+}) {
+  const job = getServerJob(jobId);
+
+  if (!job) {
+    return null;
+  }
+
+  job.status = "preview_ready";
+  job.previewSvgBuffer = svgBuffer;
+  job.svgContentType = "image/svg+xml";
+  job.vectorizerMode = "test";
+  job.previewError = undefined;
+  job.previewStatus = undefined;
+  job.creditsCalculated = creditsCalculated;
+  job.creditsCharged = creditsCharged;
+  job.vectorizerError = undefined;
+  job.vectorizerStatus = undefined;
+  getJobs().set(jobId, job);
+
+  return job;
+}
+
+export function saveServerJobFinalSvg({
   jobId,
   svgBuffer,
   creditsCalculated,
@@ -139,9 +176,11 @@ export function saveServerJobSvg({
   }
 
   job.status = "ready";
-  job.svgBuffer = svgBuffer;
+  job.finalSvgBuffer = svgBuffer;
   job.svgContentType = "image/svg+xml";
-  job.vectorizerMode = "test";
+  job.vectorizerMode = "production";
+  job.finalError = undefined;
+  job.finalStatus = undefined;
   job.creditsCalculated = creditsCalculated;
   job.creditsCharged = creditsCharged;
   job.vectorizerError = undefined;
@@ -155,10 +194,12 @@ export function saveServerJobError({
   jobId,
   error,
   status,
+  stage = "final",
 }: {
   jobId: string;
   error: string;
   status?: number;
+  stage?: "preview" | "final";
 }) {
   const job = getServerJob(jobId);
 
@@ -167,6 +208,13 @@ export function saveServerJobError({
   }
 
   job.status = "failed";
+  if (stage === "preview") {
+    job.previewError = error;
+    job.previewStatus = status;
+  } else {
+    job.finalError = error;
+    job.finalStatus = status;
+  }
   job.vectorizerError = error;
   job.vectorizerStatus = status;
   getJobs().set(jobId, job);

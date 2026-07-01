@@ -8,12 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
-import QualityCheckCard from "@/components/quality-check-card";
 import { saveClientJob } from "@/lib/client-job-store";
-import {
-  ImageQualityInspection,
-  inspectImageQuality,
-} from "@/lib/image-quality";
 import {
   ACCEPTED_FILE_TYPES,
   CUT_OPTIONS,
@@ -30,10 +25,6 @@ export default function Home() {
   const [error, setError] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [qualityInspection, setQualityInspection] =
-    useState<ImageQualityInspection>();
-  const [isQualityChecking, setIsQualityChecking] = useState(false);
-  const [qualityError, setQualityError] = useState("");
 
   useEffect(() => {
     if (!selectedFile) {
@@ -47,24 +38,6 @@ export default function Home() {
     return () => URL.revokeObjectURL(objectUrl);
   }, [selectedFile]);
 
-  const runQualityInspection = async (file: File) => {
-    setIsQualityChecking(true);
-    setQualityError("");
-    setQualityInspection(undefined);
-
-    try {
-      const inspection = await inspectImageQuality(file);
-      setQualityInspection(inspection);
-      setSelectedCut(inspection.recommendedCutType);
-      return inspection;
-    } catch {
-      setQualityError("Could not complete the image quality check.");
-      return null;
-    } finally {
-      setIsQualityChecking(false);
-    }
-  };
-
   const validateAndSetFile = (file: File) => {
     if (
       !ACCEPTED_FILE_TYPES.includes(
@@ -72,22 +45,17 @@ export default function Home() {
       )
     ) {
       setError("Please upload a PNG or JPG logo.");
-      setQualityInspection(undefined);
-      setQualityError("");
       return;
     }
 
     if (file.size > MAX_FILE_SIZE) {
       setError("Please upload an image under 10 MB.");
-      setQualityInspection(undefined);
-      setQualityError("");
       return;
     }
 
     setError("");
     setSelectedFile(file);
     setSelectedCut("single");
-    void runQualityInspection(file);
   };
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -146,10 +114,6 @@ export default function Home() {
     setIsSubmitting(true);
 
     try {
-      if (!qualityInspection && !isQualityChecking) {
-        await runQualityInspection(selectedFile);
-      }
-
       const formData = new FormData();
       formData.append("image", selectedFile);
       formData.append("cutType", selectedCut);
@@ -173,34 +137,31 @@ export default function Home() {
         imageBlob: selectedFile,
       });
 
-      const checkoutResponse = await fetch(
-        `/api/jobs/${payload.job.id}/checkout`,
+      const previewResponse = await fetch(
+        `/api/jobs/${payload.job.id}/vectorize`,
         { method: "POST" },
       );
-      const checkoutPayload = (await checkoutResponse.json()) as {
-        checkoutUrl?: string;
+      const previewPayload = (await previewResponse.json()) as {
         error?: string;
       };
 
-      if (!checkoutResponse.ok || !checkoutPayload.checkoutUrl) {
+      if (!previewResponse.ok) {
         throw new Error(
-          checkoutPayload.error ?? "Could not open Stripe Checkout.",
+          previewPayload.error ??
+            "We couldn't create a preview from this image. Try a clearer logo.",
         );
       }
 
-      window.location.href = checkoutPayload.checkoutUrl;
+      window.location.href = `/result/${payload.job.id}`;
     } catch (processingError) {
       setError(
         processingError instanceof Error
           ? processingError.message
-          : "Could not start processing.",
+          : "We couldn't create a preview from this image. Try a clearer logo.",
       );
       setIsSubmitting(false);
     }
   };
-
-  const selectedPrice =
-    CUT_OPTIONS.find((option) => option.id === selectedCut)?.price ?? "$5";
 
   return (
     <main className="min-h-screen bg-[#f7f5f0] px-4 py-6 text-[#1f2520] sm:px-6 lg:px-8">
@@ -307,11 +268,29 @@ export default function Home() {
                 </button>
               </div>
 
-              <QualityCheckCard
-                error={qualityError}
-                inspection={qualityInspection}
-                isLoading={isQualityChecking}
-              />
+              <section className="rounded-[8px] border border-[#b8d8bf] bg-[#f1f8f2] p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold uppercase tracking-[0.14em] text-[#657167]">
+                      Ready
+                    </p>
+                    <h3 className="mt-2 text-lg font-semibold text-[#315f46]">
+                      Ready to create your Cricut SVG
+                    </h3>
+                    <p className="mt-1 text-sm font-medium leading-6 text-[#27342b]">
+                      Your logo is ready to process. Clear logos work best, and
+                      tiny details may simplify in the final SVG.
+                    </p>
+                  </div>
+                  <span className="inline-flex w-fit rounded-[8px] bg-white px-3 py-1 text-sm font-semibold text-[#315f46]">
+                    Ready
+                  </span>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-[#626a61]">
+                  You can continue with this logo or upload a clearer version if
+                  you have one.
+                </p>
+              </section>
 
               <div className="grid gap-3 sm:grid-cols-2">
                 {CUT_OPTIONS.map((option) => {
@@ -323,9 +302,7 @@ export default function Home() {
                       className={`rounded-[8px] border p-4 text-left transition ${
                         isSelected
                           ? "border-[#315f46] bg-[#eef5ef] shadow-[inset_0_0_0_1px_#315f46]"
-                          : qualityInspection?.recommendedCutType === option.id
-                            ? "border-[#b8d3bf] bg-[#f7fbf7]"
-                            : "border-[#e0dbd1] bg-white hover:border-[#b9c6b6]"
+                          : "border-[#e0dbd1] bg-white hover:border-[#b9c6b6]"
                       }`}
                       type="button"
                       onClick={() => {
@@ -335,11 +312,11 @@ export default function Home() {
                       <span className="flex items-start justify-between gap-4">
                         <span>
                           <span className="block text-base font-semibold text-[#172017]">
-                            {option.name}
+                          {option.name}
                           </span>
-                          {qualityInspection?.recommendedCutType === option.id ? (
+                          {option.id === "single" ? (
                             <span className="mt-2 inline-flex rounded-[8px] bg-[#315f46] px-2 py-1 text-xs font-semibold text-white">
-                              Recommended
+                              Default
                             </span>
                           ) : null}
                           <span className="mt-2 block text-sm leading-6 text-[#626a61]">
@@ -362,8 +339,8 @@ export default function Home() {
                 onClick={handleStartProcessing}
               >
                 {isSubmitting
-                  ? "Starting Cricut workflow..."
-                  : `Get Cricut SVG - ${selectedPrice}`}
+                  ? "Creating SVG preview..."
+                  : "Create free SVG preview"}
               </button>
             </div>
           )}

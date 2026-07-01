@@ -3,7 +3,12 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { getClientJob, updateClientJobStatus } from "@/lib/client-job-store";
-import { ClientJobRecord, CUT_OPTIONS, JobSummary } from "@/lib/job-types";
+import {
+  ClientJobRecord,
+  CUT_OPTIONS,
+  JobSummary,
+  PaymentStatus,
+} from "@/lib/job-types";
 
 type ResultClientProps = {
   jobId: string;
@@ -17,6 +22,9 @@ export default function ResultClient({ jobId }: ResultClientProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [resultError, setResultError] = useState("");
   const [isSvgReady, setIsSvgReady] = useState(false);
+  const [isPreviewReady, setIsPreviewReady] = useState(false);
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("unpaid");
+  const [isStartingCheckout, setIsStartingCheckout] = useState(false);
   const [creditsCalculated, setCreditsCalculated] = useState<string | null>(
     null,
   );
@@ -41,7 +49,11 @@ export default function ResultClient({ jobId }: ResultClientProps) {
         const response = await fetch(`/api/jobs/${jobId}`);
         const payload = (await response.json()) as {
           job?: JobSummary;
+          previewReady?: boolean;
           svgReady?: boolean;
+          paymentStatus?: PaymentStatus;
+          previewError?: string | null;
+          finalError?: string | null;
           vectorizerError?: string | null;
           creditsCalculated?: string | null;
           creditsCharged?: string | null;
@@ -54,8 +66,15 @@ export default function ResultClient({ jobId }: ResultClientProps) {
         }
 
         setServerJob(payload.job ?? null);
+        setIsPreviewReady(Boolean(payload.previewReady));
         setIsSvgReady(Boolean(payload.svgReady));
-        setResultError(payload.vectorizerError ?? "");
+        setPaymentStatus(payload.paymentStatus ?? "unpaid");
+        setResultError(
+          payload.finalError ??
+            payload.previewError ??
+            payload.vectorizerError ??
+            "",
+        );
         setCreditsCalculated(payload.creditsCalculated ?? null);
         setCreditsCharged(payload.creditsCharged ?? null);
 
@@ -94,8 +113,43 @@ export default function ResultClient({ jobId }: ResultClientProps) {
   }, [job?.imageBlob]);
 
   const svgResultUrl = `/api/jobs/${jobId}/result`;
+  const svgPreviewUrl = `/api/jobs/${jobId}/preview`;
   const displayFileName = serverJob?.fileName ?? job?.fileName ?? "Uploaded logo";
-  const downloadFileName = `${displayFileName.replace(/\.[^.]+$/, "")}-logocut-test.svg`;
+  const downloadFileName = `${displayFileName.replace(/\.[^.]+$/, "")}-logocut.svg`;
+  const unlockLabel =
+    (serverJob?.cutType ?? job?.cutType) === "multi"
+      ? "Unlock layered SVG - $9"
+      : "Unlock clean SVG - $5";
+  const finalGenerationFailed =
+    paymentStatus === "paid" && !isSvgReady && Boolean(resultError);
+
+  const handleUnlock = async () => {
+    setIsStartingCheckout(true);
+    setResultError("");
+
+    try {
+      const checkoutResponse = await fetch(`/api/jobs/${jobId}/checkout`, {
+        method: "POST",
+      });
+      const checkoutPayload = (await checkoutResponse.json()) as {
+        checkoutUrl?: string;
+        error?: string;
+      };
+
+      if (!checkoutResponse.ok || !checkoutPayload.checkoutUrl) {
+        throw new Error(
+          checkoutPayload.error ?? "Could not open Stripe Checkout.",
+        );
+      }
+
+      window.location.href = checkoutPayload.checkoutUrl;
+    } catch (error) {
+      setResultError(
+        error instanceof Error ? error.message : "Could not open Stripe Checkout.",
+      );
+      setIsStartingCheckout(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -148,8 +202,8 @@ export default function ResultClient({ jobId }: ResultClientProps) {
             Your Cricut SVG workspace
           </h1>
           <p className="mt-5 max-w-2xl text-base leading-7 text-[#596158]">
-            This result was processed through Vectorizer.AI test mode. Test
-            files may contain a watermark.
+            Preview your watermarked SVG first. If it looks good, unlock the
+            clean Cricut-ready file.
           </p>
         </div>
 
@@ -191,21 +245,25 @@ export default function ResultClient({ jobId }: ResultClientProps) {
 
           <section className="rounded-[8px] border border-[#ddd8cc] bg-white p-5 shadow-[0_18px_60px_rgba(31,37,32,0.10)] sm:p-6">
             <div className="mb-4">
-              <p className="text-sm font-medium uppercase tracking-[0.14em] text-[#657167]">
-                SVG preview
-              </p>
-              <h2 className="mt-2 text-xl font-semibold text-[#172017]">
-                {isSvgReady ? "Vectorizer test SVG" : "Vectorizer result"}
+                <p className="text-sm font-medium uppercase tracking-[0.14em] text-[#657167]">
+                  SVG preview
+                </p>
+                <h2 className="mt-2 text-xl font-semibold text-[#172017]">
+                {isSvgReady
+                  ? "Clean SVG ready"
+                  : isPreviewReady
+                    ? "Watermarked preview"
+                    : "Preview unavailable"}
               </h2>
             </div>
 
-            {isSvgReady ? (
+            {isSvgReady || isPreviewReady ? (
               <div className="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-[8px] border border-[#e0dbd1] bg-[#fbfaf7]">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  alt="Vectorizer test mode SVG preview"
+                  alt={isSvgReady ? "Clean SVG preview" : "Watermarked SVG preview"}
                   className="h-full w-full object-contain p-5"
-                  src={svgResultUrl}
+                  src={isSvgReady ? svgResultUrl : svgPreviewUrl}
                 />
               </div>
             ) : (
@@ -231,7 +289,7 @@ export default function ResultClient({ jobId }: ResultClientProps) {
                 </p>
                 <p className="mt-2 max-w-sm text-sm leading-6 text-[#626a61]">
                   {resultError ||
-                    "Vectorizer.AI test mode has not returned an SVG yet."}
+                    "We couldn't create a preview from this image. Try a clearer logo."}
                 </p>
               </div>
             )}
@@ -244,6 +302,15 @@ export default function ResultClient({ jobId }: ResultClientProps) {
               >
                 Download SVG
               </a>
+            ) : isPreviewReady && paymentStatus !== "paid" ? (
+              <button
+                className="mt-5 flex h-14 w-full items-center justify-center rounded-[8px] bg-[#315f46] px-6 text-base font-semibold text-white shadow-[0_10px_24px_rgba(49,95,70,0.22)] transition hover:bg-[#264d39] focus:outline-none focus:ring-4 focus:ring-[#b8d3bf] disabled:cursor-not-allowed disabled:bg-[#8aa192] disabled:shadow-none"
+                type="button"
+                disabled={isStartingCheckout}
+                onClick={handleUnlock}
+              >
+                {isStartingCheckout ? "Opening checkout..." : unlockLabel}
+              </button>
             ) : (
               <button
                 className="mt-5 flex h-14 w-full cursor-not-allowed items-center justify-center rounded-[8px] bg-[#8aa192] px-6 text-base font-semibold text-white"
@@ -255,8 +322,22 @@ export default function ResultClient({ jobId }: ResultClientProps) {
             )}
 
             {isSvgReady ? (
+              <p className="mt-4 rounded-[8px] border border-[#c9dfcf] bg-[#f1f8f2] px-4 py-3 text-sm font-semibold text-[#315f46]">
+                Clean SVG ready. Download is enabled.
+                {creditsCalculated
+                  ? ` Credits calculated: ${creditsCalculated}.`
+                  : ""}
+                {creditsCharged ? ` Credits charged: ${creditsCharged}.` : ""}
+              </p>
+            ) : finalGenerationFailed ? (
+              <p className="mt-4 rounded-[8px] border border-[#e4b5a8] bg-[#fff4f0] px-4 py-3 text-sm font-medium text-[#8a3426]">
+                We could not create the final SVG. Contact support for a
+                refund or manual help.
+              </p>
+            ) : isPreviewReady ? (
               <p className="mt-4 rounded-[8px] border border-[#d8c36b] bg-[#fff9dc] px-4 py-3 text-sm font-semibold text-[#6a5414]">
-                TEST MODE - this SVG may contain a Vectorizer.AI watermark.
+                Preview ready. If this looks good, unlock the clean SVG.
+                TEST MODE preview may contain a Vectorizer.AI watermark.
                 {creditsCalculated
                   ? ` Credits calculated: ${creditsCalculated}.`
                   : ""}
@@ -264,7 +345,8 @@ export default function ResultClient({ jobId }: ResultClientProps) {
               </p>
             ) : (
               <p className="mt-4 rounded-[8px] border border-[#e4b5a8] bg-[#fff4f0] px-4 py-3 text-sm font-medium text-[#8a3426]">
-                {resultError || "Waiting for Vectorizer API"}
+                {resultError ||
+                  "We couldn't create a preview from this image. Try a clearer logo."}
               </p>
             )}
           </section>

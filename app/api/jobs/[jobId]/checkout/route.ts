@@ -39,6 +39,13 @@ export async function POST(request: Request, context: RouteContext) {
     );
   }
 
+  if (!job.previewSvgBuffer) {
+    return NextResponse.json(
+      { error: "Create a preview before checkout." },
+      { status: 409 },
+    );
+  }
+
   const price = getCutPrice(job.cutType);
   const origin = getRequestOrigin(request);
 

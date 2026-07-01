@@ -2,6 +2,8 @@ export type CutType = "single" | "multi";
 
 export type JobStatus =
   | "created"
+  | "previewing"
+  | "preview_ready"
   | "awaiting_payment"
   | "processing"
   | "waiting_for_vectorizer"

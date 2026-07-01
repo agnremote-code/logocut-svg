@@ -237,7 +237,7 @@ export default function TestSuiteClient() {
 
       updateItem(item.id, {
         status: "ready",
-        svgUrl: `/api/jobs/${createPayload.job.id}/result`,
+        svgUrl: `/api/jobs/${createPayload.job.id}/preview`,
         downloadName: `${baseName}-logocut-test.svg`,
         processingTimeMs: Math.round(finishedAt - startedAt),
         notes: item.notes || "Inspect cut path quality in the SVG preview.",
@@ -523,6 +523,7 @@ export default function TestSuiteClient() {
                         error={item.qualityError}
                         inspection={item.qualityInspection}
                         isLoading={item.isQualityChecking}
+                        showDebugDetails
                       />
 
                       <label className="text-sm font-semibold text-[#27342b]">

@@ -17,10 +17,13 @@ export async function GET(_request: Request, context: RouteContext) {
 
   return NextResponse.json({
     job: toJobSummary(job),
-    svgReady: Boolean(job.svgBuffer),
+    previewReady: Boolean(job.previewSvgBuffer),
+    svgReady: Boolean(job.finalSvgBuffer),
     paymentStatus: job.paymentStatus,
     checkoutSessionId: job.checkoutSessionId ?? null,
     vectorizerMode: job.vectorizerMode ?? null,
+    previewError: job.previewError ?? null,
+    finalError: job.finalError ?? null,
     vectorizerError: job.vectorizerError ?? null,
     vectorizerStatus: job.vectorizerStatus ?? null,
     creditsCalculated: job.creditsCalculated ?? null,

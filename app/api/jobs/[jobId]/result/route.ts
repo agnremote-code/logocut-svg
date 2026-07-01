@@ -15,7 +15,7 @@ function getSafeDownloadName(fileName: string) {
     .replace(/[^a-zA-Z0-9._-]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-  return `${asciiName || "logocut-svg"}-logocut-test.svg`;
+  return `${asciiName || "logocut-svg"}-logocut.svg`;
 }
 
 export async function GET(_request: Request, context: RouteContext) {
@@ -26,25 +26,26 @@ export async function GET(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Job not found." }, { status: 404 });
   }
 
-  if (job.status === "failed") {
+  if (job.status === "failed" && job.finalError) {
     return NextResponse.json(
       {
-        error: job.vectorizerError ?? "Vectorizer.AI test mode failed.",
+        error:
+          "We couldn't create the final SVG. Contact support for a refund or manual help.",
       },
       { status: 409 },
     );
   }
 
-  if (!job.svgBuffer) {
+  if (!job.finalSvgBuffer) {
     return NextResponse.json(
       {
-        error: "SVG is not ready yet.",
+        error: "Clean SVG is not ready yet.",
       },
       { status: 409 },
     );
   }
 
-  return new Response(new Uint8Array(job.svgBuffer), {
+  return new Response(new Uint8Array(job.finalSvgBuffer), {
     headers: {
       "Content-Disposition": `attachment; filename="${getSafeDownloadName(job.fileName)}"`,
       "Content-Type": job.svgContentType ?? "image/svg+xml",

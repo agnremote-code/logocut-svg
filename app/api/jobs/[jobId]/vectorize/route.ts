@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import {
   getServerJob,
+  saveServerJobFinalSvg,
   saveServerJobError,
-  saveServerJobSvg,
+  saveServerJobPreviewSvg,
   toJobSummary,
   updateServerJobStatus,
 } from "@/lib/server-job-store";
@@ -22,32 +23,59 @@ export async function POST(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Job not found." }, { status: 404 });
   }
 
-  if (job.paymentStatus !== "paid") {
-    return NextResponse.json(
-      { error: "Payment is required before processing can begin." },
-      { status: 402 },
-    );
+  const mode = job.paymentStatus === "paid" ? "production" : "test";
+
+  if (mode === "test" && job.previewSvgBuffer) {
+    return NextResponse.json({
+      job: toJobSummary(job),
+      mode: "test",
+      creditsCalculated: job.creditsCalculated ?? null,
+      creditsCharged: job.creditsCharged ?? null,
+    });
   }
 
-  updateServerJobStatus(jobId, "processing");
+  if (mode === "production" && job.finalSvgBuffer) {
+    return NextResponse.json({
+      job: toJobSummary(job),
+      mode: "production",
+      creditsCalculated: job.creditsCalculated ?? null,
+      creditsCharged: job.creditsCharged ?? null,
+    });
+  }
+
+  updateServerJobStatus(jobId, mode === "test" ? "previewing" : "processing");
 
   const result = await vectorizeImage({
     imageBuffer: job.imageBuffer,
     filename: job.fileName,
     cutType: job.cutType,
     contentType: job.fileType,
+    mode,
   });
 
   if (!result.ok) {
+    console.error("[Vectorizer.AI] vectorize failed", {
+      jobId,
+      mode,
+      code: result.code,
+      status: result.status ?? null,
+      error: result.error,
+    });
+
     const failedJob = saveServerJobError({
       jobId,
       error: result.error,
       status: result.status,
+      stage: mode === "test" ? "preview" : "final",
     });
 
     return NextResponse.json(
       {
-        error: result.error,
+        error:
+          mode === "test"
+            ? "We couldn't create a preview from this image. Try a clearer logo."
+            : "We couldn't create the final SVG. Contact support for a refund or manual help.",
+        detail: result.error,
         code: result.code,
         job: failedJob ? toJobSummary(failedJob) : null,
       },
@@ -55,12 +83,20 @@ export async function POST(_request: Request, context: RouteContext) {
     );
   }
 
-  const readyJob = saveServerJobSvg({
-    jobId,
-    svgBuffer: result.svg,
-    creditsCalculated: result.creditsCalculated,
-    creditsCharged: result.creditsCharged,
-  });
+  const readyJob =
+    mode === "test"
+      ? saveServerJobPreviewSvg({
+          jobId,
+          svgBuffer: result.svg,
+          creditsCalculated: result.creditsCalculated,
+          creditsCharged: result.creditsCharged,
+        })
+      : saveServerJobFinalSvg({
+          jobId,
+          svgBuffer: result.svg,
+          creditsCalculated: result.creditsCalculated,
+          creditsCharged: result.creditsCharged,
+        });
 
   return NextResponse.json({
     job: readyJob ? toJobSummary(readyJob) : null,

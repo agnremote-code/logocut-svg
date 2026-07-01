@@ -189,7 +189,7 @@ export default function ProcessingClient({
 
       if (nextElapsedMs >= totalDurationMs) {
         window.clearInterval(timer);
-        setVectorizerMessage("Calling Vectorizer.AI test mode...");
+        setVectorizerMessage("Creating the clean SVG...");
 
         fetch(`/api/jobs/${jobId}/vectorize`, { method: "POST" })
           .then((response) => {
@@ -249,7 +249,7 @@ export default function ProcessingClient({
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-base leading-7 text-[#596158]">
             {paymentState === "paid"
-              ? "We are preparing the file and then sending it to Vectorizer.AI test mode."
+              ? "We are creating the clean Cricut-ready SVG now."
               : paymentMessage}
           </p>
         </div>

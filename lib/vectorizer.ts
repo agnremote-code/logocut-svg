@@ -7,13 +7,14 @@ type VectorizeImageInput = {
   filename: string;
   cutType: CutType;
   contentType?: string;
+  mode?: "test" | "production";
 };
 
 type VectorizeImageSuccess = {
   ok: true;
   svg: Buffer;
   contentType: "image/svg+xml";
-  mode: "test";
+  mode: "test" | "production";
   creditsCalculated: string | null;
   creditsCharged: string | null;
 };
@@ -88,6 +89,7 @@ export async function vectorizeImage({
   filename,
   cutType,
   contentType = "application/octet-stream",
+  mode = "test",
 }: VectorizeImageInput): Promise<VectorizeImageResult> {
   const credentials = getCredentials();
 
@@ -96,7 +98,7 @@ export async function vectorizeImage({
       ok: false,
       code: "missing_credentials",
       error:
-        "Missing VECTORIZER_API_ID or VECTORIZER_API_SECRET. Add both credentials to run Vectorizer.AI test mode.",
+        "Missing VECTORIZER_API_ID or VECTORIZER_API_SECRET. Add both credentials to run Vectorizer.AI.",
     };
   }
 
@@ -124,12 +126,20 @@ export async function vectorizeImage({
     };
   }
 
+  if (mode !== "test" && mode !== "production") {
+    return {
+      ok: false,
+      code: "invalid_input",
+      error: "Vectorizer mode must be test or production.",
+    };
+  }
+
   const formData = new FormData();
   const imageBytes = new Uint8Array(toBuffer(imageBuffer));
   const imageBlob = new Blob([imageBytes], { type: contentType });
 
   formData.append("image", imageBlob, filename);
-  formData.append("mode", "test");
+  formData.append("mode", mode);
   formData.append("output.file_format", "svg");
 
   const authorization = Buffer.from(
@@ -178,7 +188,7 @@ export async function vectorizeImage({
     ok: true,
     svg,
     contentType: "image/svg+xml",
-    mode: "test",
+    mode,
     creditsCalculated: response.headers.get("x-credits-calculated"),
     creditsCharged: response.headers.get("x-credits-charged"),
   };

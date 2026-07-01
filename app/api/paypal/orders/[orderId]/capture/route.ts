@@ -17,7 +17,6 @@ import {
   saveServerJobError,
   saveServerJobFinalSvg,
   toJobSummary,
-  updateServerJobStatus,
 } from "@/lib/server-job-store";
 import { vectorizeImage } from "@/lib/vectorizer";
 
@@ -97,7 +96,7 @@ export async function POST(request: Request, context: RouteContext) {
 
   const resultUrl = `/result/${job.id}`;
 
-  if (hasServerJobFinalSvg(job)) {
+  if (hasServerJobFinalSvg(job) && job.paymentStatus === "paid") {
     return NextResponse.json({
       message: "Final generation already completed",
       resultUrl,
@@ -105,9 +104,9 @@ export async function POST(request: Request, context: RouteContext) {
     });
   }
 
-  if (job.paymentStatus === "paid") {
+  if (hasServerJobFinalSvg(job)) {
     return NextResponse.json(
-      { error: "Job already paid", resultUrl },
+      { error: "Final generation already completed", resultUrl },
       { status: 409 },
     );
   }
@@ -124,50 +123,90 @@ export async function POST(request: Request, context: RouteContext) {
   const expectedAmountCents = price.amountCents;
 
   try {
-    const capturePayload = await capturePayPalOrder({ orderId, jobId: job.id });
-    const capture = getPayPalCaptureDetails(capturePayload, job.id);
+    let paymentMetadata:
+      | {
+          paypalOrderId: string;
+          paypalCaptureId: string;
+          amountPaid: string;
+          currency: string;
+        }
+      | null = null;
 
-    if (
-      capturePayload.status !== "COMPLETED" ||
-      capture.captureStatus !== "COMPLETED" ||
-      !capture.captureId
-    ) {
-      return NextResponse.json(
-        { error: "PayPal capture failed" },
-        { status: 402 },
-      );
-    }
+    if (job.paymentStatus === "paid") {
+      if (
+        job.paymentProvider !== "paypal" ||
+        job.paypalOrderId !== orderId ||
+        !job.paypalCaptureId ||
+        !job.amountPaid ||
+        !job.currency
+      ) {
+        return NextResponse.json(
+          { error: "Job already paid", resultUrl },
+          { status: 409 },
+        );
+      }
 
-    if (
-      capture.currency !== "USD" ||
-      capture.amount !== expectedAmount ||
-      parseAmountCents(capture.amount) !== expectedAmountCents
-    ) {
-      return NextResponse.json(
-        { error: "Payment amount mismatch" },
-        { status: 400 },
-      );
+      paymentMetadata = {
+        paypalOrderId: job.paypalOrderId,
+        paypalCaptureId: job.paypalCaptureId,
+        amountPaid: job.amountPaid,
+        currency: job.currency,
+      };
+    } else {
+      const capturePayload = await capturePayPalOrder({ orderId, jobId: job.id });
+      const capture = getPayPalCaptureDetails(capturePayload, job.id);
+
+      if (
+        capturePayload.status !== "COMPLETED" ||
+        capture.captureStatus !== "COMPLETED" ||
+        !capture.captureId
+      ) {
+        return NextResponse.json(
+          { error: "PayPal capture failed" },
+          { status: 402 },
+        );
+      }
+
+      if (
+        capture.currency !== "USD" ||
+        capture.amount !== expectedAmount ||
+        parseAmountCents(capture.amount) !== expectedAmountCents
+      ) {
+        return NextResponse.json(
+          { error: "Payment amount mismatch" },
+          { status: 400 },
+        );
+      }
+
+      paymentMetadata = {
+        paypalOrderId: orderId,
+        paypalCaptureId: capture.captureId,
+        amountPaid: capture.amount,
+        currency: capture.currency,
+      };
     }
 
     const paidJob = await markServerJobPaidWithPayPal({
       jobId: job.id,
-      paypalOrderId: orderId,
-      paypalCaptureId: capture.captureId,
-      amountPaid: capture.amount,
-      currency: capture.currency,
+      ...paymentMetadata,
+      status: "processing",
     });
+    const latestPaidJob = (await getServerJob(job.id)) ?? paidJob ?? job;
 
-    if (paidJob && hasServerJobFinalSvg(paidJob)) {
-      return NextResponse.json({
-        message: "Final generation already completed",
-        resultUrl,
-        job: toJobSummary(paidJob),
-      });
+    if (hasServerJobFinalSvg(latestPaidJob)) {
+      return NextResponse.json(
+        {
+          message: "Final generation already completed",
+          resultUrl,
+          job: toJobSummary(latestPaidJob),
+        },
+      );
     }
 
-    await updateServerJobStatus(job.id, "processing");
-
-    const imageBuffer = await getServerJobOriginalImage(paidJob ?? job);
+    // Carry the verified PayPal metadata through final/error saves. Blob
+    // metadata reads can lag immediately after overwrite, so each later write
+    // must re-apply the paid fields instead of trusting a freshly read record.
+    const imageBuffer = await getServerJobOriginalImage(latestPaidJob);
 
     if (!imageBuffer) {
       return NextResponse.json(
@@ -198,6 +237,7 @@ export async function POST(request: Request, context: RouteContext) {
         error: vectorizerResult.error,
         status: vectorizerResult.status,
         stage: "final",
+        paypalPayment: paymentMetadata,
       });
 
       return NextResponse.json(
@@ -214,6 +254,7 @@ export async function POST(request: Request, context: RouteContext) {
       svgBuffer: vectorizerResult.svg,
       creditsCalculated: vectorizerResult.creditsCalculated,
       creditsCharged: vectorizerResult.creditsCharged,
+      paypalPayment: paymentMetadata,
     });
 
     return NextResponse.json({

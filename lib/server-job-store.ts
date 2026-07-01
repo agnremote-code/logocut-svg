@@ -71,6 +71,14 @@ type SaveSvgInput = {
   svgBuffer: Buffer;
   creditsCalculated: string | null;
   creditsCharged: string | null;
+  paypalPayment?: PayPalPaymentMetadata;
+};
+
+type PayPalPaymentMetadata = {
+  paypalOrderId: string;
+  paypalCaptureId: string;
+  amountPaid: string;
+  currency: string;
 };
 
 export class StorageNotConfiguredError extends Error {
@@ -372,9 +380,64 @@ function createBaseJob(input: CreateServerJobInput): ServerJobRecord {
   };
 }
 
-async function saveDurableJob(job: ServerJobRecord) {
+function applyPayPalPaymentMetadata(
+  job: ServerJobRecord,
+  payment: PayPalPaymentMetadata,
+) {
+  job.paymentProvider = "paypal";
+  job.paypalOrderId = payment.paypalOrderId;
+  job.paypalCaptureId = payment.paypalCaptureId;
+  job.paymentStatus = "paid";
+  job.paidAt = job.paidAt ?? new Date().toISOString();
+  job.amountPaid = payment.amountPaid;
+  job.currency = payment.currency;
+}
+
+function preservePaidPaymentFields(
+  nextJob: ServerJobRecord,
+  existingJob: ServerJobRecord | null,
+): ServerJobRecord {
+  if (!existingJob || existingJob.paymentStatus !== "paid") {
+    return nextJob;
+  }
+
+  return {
+    ...nextJob,
+    paymentStatus: "paid" as const,
+    paymentProvider: nextJob.paymentProvider ?? existingJob.paymentProvider,
+    checkoutSessionId: nextJob.checkoutSessionId ?? existingJob.checkoutSessionId,
+    paypalOrderId: nextJob.paypalOrderId ?? existingJob.paypalOrderId,
+    paypalCaptureId: nextJob.paypalCaptureId ?? existingJob.paypalCaptureId,
+    paidAt: nextJob.paidAt ?? existingJob.paidAt,
+    amountPaid: nextJob.amountPaid ?? existingJob.amountPaid,
+    currency: nextJob.currency ?? existingJob.currency,
+  };
+}
+
+async function readDurableJobForMerge(jobId: string) {
   try {
-    await put(getMetadataPath(job.id), JSON.stringify(job, null, 2), {
+    const metadata = await get(getMetadataPath(jobId), getBlobSdkOptions());
+
+    if (!metadata || metadata.statusCode !== 200 || !metadata.stream) {
+      return null;
+    }
+
+    return JSON.parse(await new Response(metadata.stream).text()) as ServerJobRecord;
+  } catch (error) {
+    if (error instanceof BlobNotFoundError) {
+      return null;
+    }
+
+    handleBlobSdkError("get-metadata-for-merge", error);
+  }
+}
+
+async function saveDurableJob(job: ServerJobRecord) {
+  const existingJob = await readDurableJobForMerge(job.id);
+  const jobToSave = preservePaidPaymentFields(job, existingJob);
+
+  try {
+    await put(getMetadataPath(job.id), JSON.stringify(jobToSave, null, 2), {
       ...getBlobSdkOptions(),
       contentType: "application/json",
       addRandomSuffix: false,
@@ -384,7 +447,7 @@ async function saveDurableJob(job: ServerJobRecord) {
     handleBlobSdkError("put-metadata", error);
   }
 
-  return job;
+  return jobToSave;
 }
 
 async function putDurableFile({
@@ -593,21 +656,27 @@ export async function markServerJobPaidWithPayPal({
   paypalCaptureId,
   amountPaid,
   currency,
+  status,
 }: {
   jobId: string;
   paypalOrderId: string;
   paypalCaptureId: string;
   amountPaid: string;
   currency: string;
+  status?: JobStatus;
 }) {
   return updateServerJob(jobId, (job) => {
-    job.paymentProvider = "paypal";
-    job.paypalOrderId = paypalOrderId;
-    job.paypalCaptureId = paypalCaptureId;
-    job.paymentStatus = "paid";
-    job.paidAt = job.paidAt ?? new Date().toISOString();
-    job.amountPaid = amountPaid;
-    job.currency = currency;
+    applyPayPalPaymentMetadata(job, {
+      paypalOrderId,
+      paypalCaptureId,
+      amountPaid,
+      currency,
+    });
+
+    if (status) {
+      job.status = status;
+      return;
+    }
 
     if (job.status === "awaiting_payment" || job.status === "preview_ready") {
       job.status = "created";
@@ -670,6 +739,7 @@ export async function saveServerJobFinalSvg({
   svgBuffer,
   creditsCalculated,
   creditsCharged,
+  paypalPayment,
 }: SaveSvgInput) {
   const finalFile = shouldUseMemoryStorage()
     ? undefined
@@ -681,6 +751,10 @@ export async function saveServerJobFinalSvg({
       });
 
   return updateServerJob(jobId, (job) => {
+    if (paypalPayment) {
+      applyPayPalPaymentMetadata(job, paypalPayment);
+    }
+
     if (isMemoryJob(job)) {
       job.finalSvgBuffer = svgBuffer;
     }
@@ -707,13 +781,19 @@ export async function saveServerJobError({
   error,
   status,
   stage = "final",
+  paypalPayment,
 }: {
   jobId: string;
   error: string;
   status?: number;
   stage?: "preview" | "final";
+  paypalPayment?: PayPalPaymentMetadata;
 }) {
   return updateServerJob(jobId, (job) => {
+    if (paypalPayment) {
+      applyPayPalPaymentMetadata(job, paypalPayment);
+    }
+
     job.status = "failed";
     job.errorMessages = Array.from(new Set([...job.errorMessages, error]));
 

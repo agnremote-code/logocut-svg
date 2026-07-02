@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   capturePayPalOrder,
   getExpectedPayPalAmount,
+  getPayPalOrderDetails,
   isPayPalNotConfiguredError,
 } from "@/lib/paypal";
 import { getCutPrice } from "@/lib/pricing";
@@ -52,6 +53,51 @@ function getPayPalCaptureDetails(
     currency: capture?.amount?.currency_code,
     amount: capture?.amount?.value,
   };
+}
+
+function getPayPalOrderMatchDetails(
+  payload: Awaited<ReturnType<typeof getPayPalOrderDetails>>,
+  jobId: string,
+) {
+  const purchaseUnits = payload.purchase_units ?? [];
+  const matchingPurchaseUnit = purchaseUnits.find(
+    (unit) => unit.reference_id === jobId || unit.custom_id === jobId,
+  );
+  const purchaseUnit = matchingPurchaseUnit ?? purchaseUnits[0];
+  const completedCapture = purchaseUnit?.payments?.captures?.find(
+    (capture) => capture.status === "COMPLETED",
+  );
+
+  return {
+    purchaseUnit,
+    referenceMatches: Boolean(matchingPurchaseUnit),
+    completedCapture,
+    captureId: completedCapture?.id,
+    captureStatus: completedCapture?.status,
+    currency:
+      completedCapture?.amount?.currency_code ??
+      purchaseUnit?.amount?.currency_code,
+    amount: completedCapture?.amount?.value ?? purchaseUnit?.amount?.value,
+  };
+}
+
+function logPayPalCaptureEvent(
+  operation: string,
+  details: {
+    jobId: string;
+    orderId: string;
+    jobPaypalOrderIdPresent?: boolean;
+    localOrderMatches?: boolean;
+    paypalReferenceMatches?: boolean;
+    paypalOrderStatus?: string;
+    captureStatus?: string;
+    mismatchReason?: string;
+  },
+) {
+  console.info("[PayPal] capture", {
+    operation,
+    ...details,
+  });
 }
 
 export async function POST(request: Request, context: RouteContext) {
@@ -111,18 +157,57 @@ export async function POST(request: Request, context: RouteContext) {
     );
   }
 
-  if (job.paypalOrderId !== orderId) {
-    return NextResponse.json(
-      { error: "PayPal capture failed" },
-      { status: 400 },
-    );
-  }
-
   const price = getCutPrice(job.cutType);
   const expectedAmount = getExpectedPayPalAmount(price);
   const expectedAmountCents = price.amountCents;
 
   try {
+    const jobPaypalOrderIdPresent = Boolean(job.paypalOrderId);
+    const localOrderMatches = job.paypalOrderId === orderId;
+    const orderDetails = await getPayPalOrderDetails({ orderId });
+    const orderMatch = getPayPalOrderMatchDetails(orderDetails, job.id);
+    const orderBelongsToJob = orderMatch.referenceMatches || localOrderMatches;
+
+    logPayPalCaptureEvent("order-verified", {
+      jobId: job.id,
+      orderId,
+      jobPaypalOrderIdPresent,
+      localOrderMatches,
+      paypalReferenceMatches: orderMatch.referenceMatches,
+      paypalOrderStatus: orderDetails.status,
+      captureStatus: orderMatch.captureStatus,
+      mismatchReason: orderBelongsToJob ? undefined : "job-id-mismatch",
+    });
+
+    if (!orderBelongsToJob) {
+      return NextResponse.json(
+        { error: "PayPal order does not match job" },
+        { status: 400 },
+      );
+    }
+
+    if (
+      orderMatch.currency !== "USD" ||
+      orderMatch.amount !== expectedAmount ||
+      parseAmountCents(orderMatch.amount) !== expectedAmountCents
+    ) {
+      logPayPalCaptureEvent("amount-mismatch", {
+        jobId: job.id,
+        orderId,
+        jobPaypalOrderIdPresent,
+        localOrderMatches,
+        paypalReferenceMatches: orderMatch.referenceMatches,
+        paypalOrderStatus: orderDetails.status,
+        captureStatus: orderMatch.captureStatus,
+        mismatchReason: "amount-or-currency-mismatch",
+      });
+
+      return NextResponse.json(
+        { error: "Payment amount mismatch" },
+        { status: 400 },
+      );
+    }
+
     let paymentMetadata:
       | {
           paypalOrderId: string;
@@ -135,7 +220,6 @@ export async function POST(request: Request, context: RouteContext) {
     if (job.paymentStatus === "paid") {
       if (
         job.paymentProvider !== "paypal" ||
-        job.paypalOrderId !== orderId ||
         !job.paypalCaptureId ||
         !job.amountPaid ||
         !job.currency
@@ -147,10 +231,23 @@ export async function POST(request: Request, context: RouteContext) {
       }
 
       paymentMetadata = {
-        paypalOrderId: job.paypalOrderId,
+        paypalOrderId: job.paypalOrderId ?? orderId,
         paypalCaptureId: job.paypalCaptureId,
         amountPaid: job.amountPaid,
         currency: job.currency,
+      };
+    } else if (
+      orderDetails.status === "COMPLETED" &&
+      orderMatch.captureStatus === "COMPLETED" &&
+      orderMatch.captureId &&
+      orderMatch.amount &&
+      orderMatch.currency
+    ) {
+      paymentMetadata = {
+        paypalOrderId: orderId,
+        paypalCaptureId: orderMatch.captureId,
+        amountPaid: orderMatch.amount,
+        currency: orderMatch.currency,
       };
     } else {
       const capturePayload = await capturePayPalOrder({ orderId, jobId: job.id });
@@ -184,6 +281,16 @@ export async function POST(request: Request, context: RouteContext) {
         amountPaid: capture.amount,
         currency: capture.currency,
       };
+
+      logPayPalCaptureEvent("capture-completed", {
+        jobId: job.id,
+        orderId,
+        jobPaypalOrderIdPresent,
+        localOrderMatches,
+        paypalReferenceMatches: orderMatch.referenceMatches,
+        paypalOrderStatus: capturePayload.status,
+        captureStatus: capture.captureStatus,
+      });
     }
 
     const paidJob = await markServerJobPaidWithPayPal({
@@ -242,8 +349,7 @@ export async function POST(request: Request, context: RouteContext) {
 
       return NextResponse.json(
         {
-          error:
-            "We couldn't create the final SVG. Contact support for a refund or manual help.",
+          error: "Final generation failed",
         },
         { status: vectorizerResult.code === "missing_credentials" ? 503 : 502 },
       );

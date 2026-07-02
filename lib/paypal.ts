@@ -5,30 +5,35 @@ type PayPalEnvironment = "sandbox" | "live";
 type PayPalOrderResponse = {
   id?: string;
   status?: string;
+  purchase_units?: PayPalPurchaseUnit[];
+};
+
+type PayPalPurchaseUnit = {
+  reference_id?: string;
+  custom_id?: string;
+  amount?: {
+    currency_code?: string;
+    value?: string;
+  };
+  payments?: {
+    captures?: Array<{
+      id?: string;
+      status?: string;
+      amount?: {
+        currency_code?: string;
+        value?: string;
+      };
+    }>;
+  };
 };
 
 export type PayPalCaptureResponse = {
   id?: string;
   status?: string;
-  purchase_units?: Array<{
-    reference_id?: string;
-    custom_id?: string;
-    amount?: {
-      currency_code?: string;
-      value?: string;
-    };
-    payments?: {
-      captures?: Array<{
-        id?: string;
-        status?: string;
-        amount?: {
-          currency_code?: string;
-          value?: string;
-        };
-      }>;
-    };
-  }>;
+  purchase_units?: PayPalPurchaseUnit[];
 };
+
+export type PayPalOrderDetailsResponse = PayPalOrderResponse;
 
 export class PayPalNotConfiguredError extends Error {
   constructor() {
@@ -111,9 +116,9 @@ async function paypalRequest<T>({
   errorMessage,
 }: {
   path: string;
-  method: "POST";
+  method: "GET" | "POST";
   body?: unknown;
-  requestId: string;
+  requestId?: string;
   errorMessage: string;
 }) {
   const accessToken = await getPayPalAccessToken();
@@ -122,7 +127,7 @@ async function paypalRequest<T>({
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
-      "PayPal-Request-Id": requestId,
+      ...(requestId ? { "PayPal-Request-Id": requestId } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
     cache: "no-store",
@@ -169,6 +174,18 @@ export async function createPayPalOrder({
   }
 
   return order.id;
+}
+
+export async function getPayPalOrderDetails({
+  orderId,
+}: {
+  orderId: string;
+}) {
+  return paypalRequest<PayPalOrderDetailsResponse>({
+    path: `/v2/checkout/orders/${encodeURIComponent(orderId)}`,
+    method: "GET",
+    errorMessage: "PayPal order lookup failed",
+  });
 }
 
 export async function capturePayPalOrder({

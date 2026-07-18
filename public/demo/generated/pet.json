@@ -1,0 +1,10 @@
+{
+  "id": "pet",
+  "label": "Pet",
+  "title": "Loyal Companion",
+  "desc": "Original generic dog profile",
+  "art": "<path d=\"M91 253c12-56 35-81 67-91-17-21-18-45-7-70 17 7 33 18 46 34 29-6 58 2 79 22l31 8-22 26c-5 48-35 81-86 88-34 5-70 0-108-17Zm105-95c0 7 11 7 11 0s-11-7-11 0Z\" fill-rule=\"evenodd\"/>",
+  "original": "/demo/generated/pet-original.png",
+  "result": "/demo/generated/pet.svg",
+  "thumbnail": "/demo/generated/pet-thumb.png"
+}

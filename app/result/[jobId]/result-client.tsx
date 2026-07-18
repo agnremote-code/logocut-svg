@@ -12,6 +12,7 @@ import {
   JobSummary,
   PaymentStatus,
 } from "@/lib/job-types";
+import { ResultViewer } from "@/components/result-viewer";
 
 type ResultClientProps = {
   jobId: string;
@@ -397,7 +398,19 @@ export default function ResultClient({ jobId }: ResultClientProps) {
           </p>
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-[1fr_1fr]">
+        {originalImageUrl && (isSvgReady || isPreviewReady) ? (
+          <div className="min-h-[620px] rounded-[20px] bg-white p-3 shadow-[0_18px_60px_rgba(31,37,32,0.10)]">
+            <ResultViewer
+              original={originalImageUrl}
+              result={isSvgReady ? svgResultUrl : svgPreviewUrl}
+              originalLabel="Your original"
+              badge={isSvgReady ? "Paid result available" : "Free Watermarked Preview"}
+              title={displayFileName}
+            />
+          </div>
+        ) : null}
+
+        <div className={`grid gap-5 lg:grid-cols-[1fr_1fr] ${originalImageUrl && (isSvgReady || isPreviewReady) ? "hidden" : ""}`}>
           <section className="rounded-[8px] border border-[#ddd8cc] bg-white p-5 shadow-[0_18px_60px_rgba(31,37,32,0.10)] sm:p-6">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div className="min-w-0">

@@ -1,0 +1,10 @@
+{
+  "id": "make",
+  "label": "Text",
+  "title": "Make Something",
+  "desc": "One-color text design",
+  "art": "<text x=\"190\" y=\"145\" text-anchor=\"middle\" font-family=\"Arial Black,Arial\" font-size=\"56\" font-weight=\"900\">MAKE</text><text x=\"190\" y=\"211\" text-anchor=\"middle\" font-family=\"Arial Black,Arial\" font-size=\"46\" font-weight=\"900\">SOMETHING</text><path d=\"M74 239h232v12H74zM92 83h196v9H92z\"/>",
+  "original": "/demo/generated/make-original.png",
+  "result": "/demo/generated/make.svg",
+  "thumbnail": "/demo/generated/make-thumb.png"
+}

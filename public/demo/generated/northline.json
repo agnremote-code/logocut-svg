@@ -1,0 +1,10 @@
+{
+  "id": "northline",
+  "label": "Logo",
+  "title": "Northline Studio",
+  "desc": "Geometric mountain and wordmark",
+  "art": "<path d=\"M70 190 154 62l45 68 28-42 83 102H70Z\"/><path d=\"m116 190 39-59 20 30 24-31 49 60H116Z\" fill=\"#fff\"/><text x=\"190\" y=\"240\" text-anchor=\"middle\" font-family=\"Arial\" font-size=\"30\" font-weight=\"700\" letter-spacing=\"5\">NORTHLINE</text><text x=\"190\" y=\"267\" text-anchor=\"middle\" font-family=\"Arial\" font-size=\"13\" letter-spacing=\"7\">STUDIO</text>",
+  "original": "/demo/generated/northline-original.png",
+  "result": "/demo/generated/northline.svg",
+  "thumbnail": "/demo/generated/northline-thumb.png"
+}

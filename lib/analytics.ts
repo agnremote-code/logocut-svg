@@ -13,15 +13,29 @@ type AnalyticsEventName =
   | "paypal_order_created"
   | "purchase_completed"
   | "svg_downloaded"
+  | "demo_sample_selected"
+  | "comparison_slider_used"
+  | "conversion_setting_changed"
+  | "advanced_settings_opened"
+  | "preview_view_mode_changed"
+  | "cut_preview_background_changed"
+  | "preview_zoom_used"
+  | "preview_regenerated"
   | "purchase";
 
 type AnalyticsParams = {
   cut_type?: CutType;
   source_page?: string;
   file_type?: string;
-  value?: number;
   currency?: "USD";
   transaction_id?: string;
+  sample?: string;
+  position_bucket?: number;
+  setting?: string;
+  value?: number | string;
+  view_mode?: string;
+  background?: string;
+  direction?: string;
 };
 
 declare global {

@@ -1,0 +1,10 @@
+{
+  "id": "floral",
+  "label": "AI Artwork",
+  "title": "Petal Geometry",
+  "desc": "Floral geometric illustration",
+  "art": "<g transform=\"translate(190 165)\"><ellipse rx=\"35\" ry=\"105\"/><ellipse rx=\"35\" ry=\"105\" transform=\"rotate(45)\"/><ellipse rx=\"35\" ry=\"105\" transform=\"rotate(90)\"/><ellipse rx=\"35\" ry=\"105\" transform=\"rotate(135)\"/><circle r=\"37\" fill=\"#fff\"/><circle r=\"20\"/></g><path d=\"M190 270v40m-48-18h96\" fill=\"none\" stroke=\"#111815\" stroke-width=\"10\" stroke-linecap=\"round\"/>",
+  "original": "/demo/generated/floral-original.png",
+  "result": "/demo/generated/floral.svg",
+  "thumbnail": "/demo/generated/floral-thumb.png"
+}

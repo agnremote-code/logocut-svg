@@ -1,0 +1,10 @@
+{
+  "id": "rocket",
+  "label": "Cartoon",
+  "title": "Little Voyager",
+  "desc": "Friendly rocket illustration",
+  "art": "<path d=\"M190 55c53 34 77 82 64 145l-64 37-64-37c-13-63 11-111 64-145Z\"/><circle cx=\"190\" cy=\"137\" r=\"27\" fill=\"#fff\"/><path d=\"m129 176-43 46 52 4m113-50 43 46-52 4M164 235l26 58 26-58\"/><path d=\"M179 259h22l-11 36-11-36Z\" fill=\"#fff\"/>",
+  "original": "/demo/generated/rocket-original.png",
+  "result": "/demo/generated/rocket.svg",
+  "thumbnail": "/demo/generated/rocket-thumb.png"
+}

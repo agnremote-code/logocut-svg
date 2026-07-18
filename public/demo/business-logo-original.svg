@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="480" viewBox="0 0 480 480" role="img" aria-label="Original raster-style fictional business logo">
+  <rect width="480" height="480" fill="#f8fafc"/>
+  <g opacity=".24" fill="#cbd5e1">
+    <rect x="70" y="90" width="340" height="12"/>
+    <rect x="64" y="118" width="352" height="12"/>
+    <rect x="70" y="146" width="340" height="12"/>
+    <rect x="64" y="174" width="352" height="12"/>
+    <rect x="70" y="202" width="340" height="12"/>
+    <rect x="64" y="230" width="352" height="12"/>
+    <rect x="70" y="258" width="340" height="12"/>
+    <rect x="64" y="286" width="352" height="12"/>
+    <rect x="70" y="314" width="340" height="12"/>
+    <rect x="64" y="342" width="352" height="12"/>
+    <rect x="70" y="370" width="340" height="12"/>
+  </g>
+  <path d="M105 146h270v188H105z" fill="#1f2937"/>
+  <path d="M126 167h228v146H126z" fill="#f8fafc"/>
+  <circle cx="240" cy="221" r="45" fill="#16a34a"/>
+  <path d="M207 258h66v24h-66z" fill="#1f2937"/>
+  <path d="M165 301h150v19H165z" fill="#1f2937"/>
+  <g opacity=".32" fill="#94a3b8">
+    <rect x="110" y="150" width="16" height="184"/>
+    <rect x="354" y="151" width="12" height="183"/>
+    <rect x="105" y="322" width="270" height="12"/>
+  </g>
+</svg>

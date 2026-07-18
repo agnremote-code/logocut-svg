@@ -39,6 +39,14 @@ export async function GET(_request: Request, context: RouteContext) {
     previewReady: hasServerJobPreviewSvg(job),
     svgReady: hasServerJobFinalSvg(job),
     paymentStatus: job.paymentStatus,
+    purchase:
+      job.paymentStatus === "paid" && job.paypalOrderId && job.amountPaid
+        ? {
+            transactionId: job.paypalOrderId,
+            value: Number(job.amountPaid),
+            currency: job.currency ?? "USD",
+          }
+        : null,
     checkoutSessionId: job.checkoutSessionId ?? null,
     vectorizerMode: job.vectorizerMode ?? null,
     previewError: job.previewError ?? null,

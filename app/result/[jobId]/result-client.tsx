@@ -4,6 +4,7 @@ import Script from "next/script";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getClientJob, updateClientJobStatus } from "@/lib/client-job-store";
+import { trackEvent, trackPurchaseOnce } from "@/lib/analytics";
 import {
   ClientJobRecord,
   CUT_OPTIONS,
@@ -44,6 +45,7 @@ declare global {
 export default function ResultClient({ jobId }: ResultClientProps) {
   const router = useRouter();
   const paypalButtonContainerRef = useRef<HTMLDivElement | null>(null);
+  const resultViewTrackedRef = useRef(false);
   const [job, setJob] = useState<ClientJobRecord | null>(null);
   const [serverJob, setServerJob] = useState<JobSummary | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -58,6 +60,11 @@ export default function ResultClient({ jobId }: ResultClientProps) {
     null,
   );
   const [creditsCharged, setCreditsCharged] = useState<string | null>(null);
+  const [purchaseDetails, setPurchaseDetails] = useState<{
+    transactionId: string;
+    value: number;
+    currency: string;
+  } | null>(null);
   const paypalClientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID;
   const activeCutType: CutType = serverJob?.cutType ?? job?.cutType ?? "single";
   const paypalSdkUrl = paypalClientId
@@ -97,6 +104,11 @@ export default function ResultClient({ jobId }: ResultClientProps) {
           vectorizerError?: string | null;
           creditsCalculated?: string | null;
           creditsCharged?: string | null;
+          purchase?: {
+            transactionId?: string;
+            value?: number;
+            currency?: string;
+          } | null;
           error?: string;
         };
 
@@ -117,6 +129,16 @@ export default function ResultClient({ jobId }: ResultClientProps) {
         );
         setCreditsCalculated(payload.creditsCalculated ?? null);
         setCreditsCharged(payload.creditsCharged ?? null);
+        setPurchaseDetails(
+          payload.purchase?.transactionId &&
+            typeof payload.purchase.value === "number"
+            ? {
+                transactionId: payload.purchase.transactionId,
+                value: payload.purchase.value,
+                currency: payload.purchase.currency ?? "USD",
+              }
+            : null,
+        );
 
         if (storedJob && payload.job?.status === "ready") {
           updateClientJobStatus(jobId, "ready");
@@ -139,6 +161,32 @@ export default function ResultClient({ jobId }: ResultClientProps) {
       isMounted = false;
     };
   }, [jobId]);
+
+  useEffect(() => {
+    if (!isLoading && (job || serverJob) && !resultViewTrackedRef.current) {
+      resultViewTrackedRef.current = true;
+      trackEvent("result_page_view", {
+        cut_type: activeCutType,
+        source_page: "result_page",
+      });
+    }
+  }, [activeCutType, isLoading, job, serverJob]);
+
+  useEffect(() => {
+    if (
+      paymentStatus !== "paid" ||
+      !purchaseDetails ||
+      purchaseDetails.currency !== "USD"
+    ) {
+      return;
+    }
+
+    trackPurchaseOnce({
+      transactionId: purchaseDetails.transactionId,
+      value: purchaseDetails.value,
+      cutType: activeCutType,
+    });
+  }, [activeCutType, paymentStatus, purchaseDetails]);
 
   useEffect(() => {
     if (!job?.imageBlob) {
@@ -203,6 +251,13 @@ export default function ResultClient({ jobId }: ResultClientProps) {
           setIsStartingCheckout(false);
           throw new Error(message);
         }
+
+        trackEvent("paypal_order_created", {
+          cut_type: activeCutType,
+          source_page: "result_page",
+          value: activeCutType === "multi" ? 9 : 5,
+          currency: "USD",
+        });
 
         return payload.orderId;
       },
@@ -434,6 +489,12 @@ export default function ResultClient({ jobId }: ResultClientProps) {
                 className="mt-5 flex h-14 w-full items-center justify-center rounded-[8px] bg-[#315f46] px-6 text-base font-semibold text-white shadow-[0_10px_24px_rgba(49,95,70,0.22)] transition hover:bg-[#264d39]"
                 download={downloadFileName}
                 href={svgResultUrl}
+                onClick={() =>
+                  trackEvent("svg_downloaded", {
+                    cut_type: activeCutType,
+                    source_page: "result_page",
+                  })
+                }
               >
                 Download SVG
               </a>

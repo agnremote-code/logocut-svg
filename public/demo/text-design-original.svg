@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="480" viewBox="0 0 480 480" role="img" aria-label="Original raster-style handmade text design">
+  <rect width="480" height="480" fill="#f8fafc"/>
+  <g opacity=".28" fill="#cbd5e1">
+    <rect x="72" y="136" width="336" height="12"/>
+    <rect x="64" y="184" width="352" height="12"/>
+    <rect x="72" y="232" width="336" height="12"/>
+    <rect x="64" y="280" width="352" height="12"/>
+    <rect x="72" y="328" width="336" height="12"/>
+  </g>
+  <path fill="#111827" d="M97 190h44v102H97zm69 0h40l38 58v-58h43v102h-40l-38-58v58h-43zm148 0h69v30h-26v72h-43v-72h-26z"/>
+  <path fill="#16a34a" d="M110 321h260v20H110z"/>
+  <g opacity=".24" fill="#64748b">
+    <rect x="95" y="190" width="12" height="102"/>
+    <rect x="244" y="190" width="12" height="102"/>
+    <rect x="110" y="334" width="260" height="7"/>
+  </g>
+</svg>

@@ -23,6 +23,8 @@ declare global {
 export function PayPalCheckout({ jobId, cutType }: { jobId: string; cutType: CutType }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewedRef = useRef(false);
+  const buttonsRenderedRef = useRef(false);
+  const operationRef = useRef<"idle" | "order" | "capture">("idle");
   const [sdkReady, setSdkReady] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState("");
@@ -48,58 +50,81 @@ export function PayPalCheckout({ jobId, cutType }: { jobId: string; cutType: Cut
     const buttons = window.paypal.Buttons({
       style: { color: "gold", label: "paypal", layout: "vertical", shape: "rect" },
       createOrder: async () => {
+        operationRef.current = "order";
         setProcessing(true);
         setError("");
-        const response = await fetch("/api/paypal/orders", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ jobId, cutType }),
-        });
-        const payload = (await response.json()) as { orderId?: string; error?: string };
-        if (!response.ok || !payload.orderId) {
+        try {
+          const response = await fetch("/api/paypal/orders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ jobId, cutType }),
+          });
+          const payload = (await response.json()) as { orderId?: string; error?: string };
+          if (!response.ok || !payload.orderId) throw new Error("order failed");
+          trackEvent("paypal_order_created", {
+            cut_type: cutType,
+            source_page: "conversion_studio",
+            value: cutType === "multi" ? 9 : 5,
+            currency: "USD",
+          });
+          operationRef.current = "idle";
+          return payload.orderId;
+        } catch {
           setProcessing(false);
-          throw new Error(payload.error ?? "PayPal order creation failed");
+          setError("Checkout could not be started. Please try again.");
+          throw new Error("PayPal order creation failed");
         }
-        trackEvent("paypal_order_created", {
-          cut_type: cutType,
-          source_page: "conversion_studio",
-          value: cutType === "multi" ? 9 : 5,
-          currency: "USD",
-        });
-        return payload.orderId;
       },
       onApprove: async ({ orderID }) => {
+        operationRef.current = "capture";
         if (!orderID) {
           setProcessing(false);
-          setError("Payment confirmation could not be completed.");
+          setError("Payment could not be completed. You were not charged.");
           return;
         }
-        const response = await fetch(`/api/paypal/orders/${orderID}/capture`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ jobId }),
-        });
-        const payload = (await response.json()) as {
-          resultUrl?: string;
-          processingUrl?: string;
-          error?: string;
-        };
-        if (!response.ok) {
+        try {
+          const response = await fetch(`/api/paypal/orders/${orderID}/capture`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ jobId }),
+          });
+          const payload = (await response.json()) as {
+            resultUrl?: string;
+            processingUrl?: string;
+          };
+          if (!response.ok) throw new Error("capture failed");
+          window.location.href = payload.resultUrl ?? payload.processingUrl ?? `/result/${jobId}`;
+        } catch {
           setProcessing(false);
-          throw new Error(payload.error ?? "Payment confirmation failed");
+          setError("Payment could not be completed. You were not charged.");
         }
-        window.location.href = payload.resultUrl ?? payload.processingUrl ?? `/result/${jobId}`;
       },
-      onCancel: () => setProcessing(false),
+      onCancel: () => {
+        operationRef.current = "idle";
+        setProcessing(false);
+      },
       onError: () => {
         if (!active) return;
         setProcessing(false);
-        setError("PayPal could not be loaded. Please try again.");
+        if (operationRef.current === "order") {
+          setError("Checkout could not be started. Please try again.");
+        } else if (operationRef.current === "capture") {
+          setError("Payment could not be completed. You were not charged.");
+        } else if (!buttonsRenderedRef.current) {
+          setError("PayPal checkout could not be loaded. Refresh the page and try again.");
+        }
       },
     });
 
-    buttons.render(container).catch(() => {
-      if (active) setError("PayPal could not be loaded. Please try again.");
+    buttons.render(container).then(() => {
+      if (!active) return;
+      buttonsRenderedRef.current = true;
+      operationRef.current = "idle";
+      setError("");
+    }).catch(() => {
+      if (active && !buttonsRenderedRef.current) {
+        setError("PayPal checkout could not be loaded. Refresh the page and try again.");
+      }
     });
     return () => {
       active = false;
@@ -113,7 +138,16 @@ export function PayPalCheckout({ jobId, cutType }: { jobId: string; cutType: Cut
 
   return (
     <div className="studio-paypal" aria-label="PayPal checkout">
-      <Script src={sdkUrl} strategy="afterInteractive" onLoad={() => setSdkReady(true)} />
+      <Script
+        id="paypal-sdk"
+        src={sdkUrl}
+        strategy="afterInteractive"
+        onLoad={() => {
+          setError("");
+          setSdkReady(true);
+        }}
+        onError={() => setError("PayPal checkout could not be loaded. Refresh the page and try again.")}
+      />
       <div ref={containerRef} className="paypal-button-slot" />
       {processing ? <p role="status">Confirming payment…</p> : null}
       {error ? <p className="checkout-error" role="alert">{error}</p> : null}

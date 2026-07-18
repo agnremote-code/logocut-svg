@@ -12,6 +12,7 @@ import {
   MAX_FILE_SIZE,
 } from "@/lib/job-types";
 import { trackEvent } from "@/lib/analytics";
+import { resolvePreviewAsset } from "@/lib/preview-asset";
 
 const samples = [
   ["northline", "Logo", "Northline Studio"],
@@ -29,6 +30,11 @@ type StudioState =
   | "preview_ready"
   | "preview_error"
   | "paid_result";
+type PreviewAssetState =
+  | "preview_asset_loading"
+  | "preview_asset_ready"
+  | "preview_asset_error"
+  | null;
 
 function SelectedFilePlaceholder({ original, title }: { original: string; title: string }) {
   return (
@@ -69,6 +75,20 @@ function PreviewGenerating({ original, title }: { original: string; title: strin
   );
 }
 
+function PreviewDisplayError({ onRetry, onChoose }: { onRetry: () => void; onChoose: () => void }) {
+  return (
+    <div className="preview-display-error" role="alert">
+      <span aria-hidden="true">!</span>
+      <h3>Preview could not be displayed</h3>
+      <p>The SVG was generated, but the preview file could not be loaded. Please try again.</p>
+      <div>
+        <button className="primary-button" onClick={onRetry}>Retry Preview</button>
+        <button className="secondary-button" onClick={onChoose}>Choose Another Image</button>
+      </div>
+    </div>
+  );
+}
+
 export function ConversionStudio() {
   const input = useRef<HTMLInputElement>(null);
   const studio = useRef<HTMLElement>(null);
@@ -77,6 +97,8 @@ export function ConversionStudio() {
   const [file, setFile] = useState<File | null>(null);
   const [userOriginalUrl, setUserOriginalUrl] = useState<string | null>(null);
   const [userPreviewUrl, setUserPreviewUrl] = useState<string | null>(null);
+  const [previewReference, setPreviewReference] = useState<string | null>(null);
+  const [previewAssetState, setPreviewAssetState] = useState<PreviewAssetState>(null);
   const [cut, setCut] = useState<CutType>("single");
   const [previewCut, setPreviewCut] = useState<CutType | null>(null);
   const [error, setError] = useState("");
@@ -102,6 +124,13 @@ export function ConversionStudio() {
     [userOriginalUrl],
   );
 
+  useEffect(
+    () => () => {
+      if (userPreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(userPreviewUrl);
+    },
+    [userPreviewUrl],
+  );
+
   const chooseSample = (index: number) => {
     if (state !== "demo") return;
     setSample(index);
@@ -110,8 +139,25 @@ export function ConversionStudio() {
 
   const clearRealPreview = () => {
     setUserPreviewUrl(null);
+    setPreviewReference(null);
+    setPreviewAssetState(null);
     setPreviewCut(null);
     setJobId("");
+  };
+
+  const loadPreviewAsset = async (reference: string) => {
+    setPreviewAssetState("preview_asset_loading");
+    setState("preview_generating");
+    try {
+      const resolvedUrl = await resolvePreviewAsset(reference);
+      setUserPreviewUrl(resolvedUrl);
+      return true;
+    } catch {
+      setUserPreviewUrl(null);
+      setPreviewAssetState("preview_asset_error");
+      setState("preview_error");
+      return false;
+    }
   };
 
   const acceptFile = (nextFile: File) => {
@@ -197,9 +243,10 @@ export function ConversionStudio() {
       }
 
       setJobId(createPayload.job.id);
-      setUserPreviewUrl(`/api/jobs/${createPayload.job.id}/preview`);
       setPreviewCut(cut);
-      setState("preview_ready");
+      const reference = `/api/jobs/${createPayload.job.id}/preview`;
+      setPreviewReference(reference);
+      await loadPreviewAsset(reference);
       trackEvent("preview_generated", {
         source_page: "homepage_studio",
         cut_type: cut,
@@ -215,7 +262,28 @@ export function ConversionStudio() {
   };
 
   const hasMatchingPreview =
-    state === "preview_ready" && Boolean(userOriginalUrl && userPreviewUrl && jobId) && previewCut === cut;
+    state === "preview_ready" &&
+    previewAssetState === "preview_asset_ready" &&
+    Boolean(userOriginalUrl && userPreviewUrl && jobId) &&
+    previewCut === cut;
+
+  const markPreviewLoaded = () => {
+    setPreviewAssetState("preview_asset_ready");
+    setState("preview_ready");
+  };
+
+  const markPreviewFailed = () => {
+    setPreviewAssetState("preview_asset_error");
+    setState("preview_error");
+  };
+
+  const retryPreview = async () => {
+    if (previewReference) {
+      const recovered = await loadPreviewAsset(previewReference);
+      if (recovered) return;
+    }
+    await generatePreview();
+  };
 
   return (
     <section
@@ -336,20 +404,31 @@ export function ConversionStudio() {
             title={samples[sample][2]}
           />
         ) : null}
-        {(state === "file_selected" || state === "preview_error") && userOriginalUrl && file ? (
+        {state === "file_selected" && userOriginalUrl && file ? (
           <SelectedFilePlaceholder original={userOriginalUrl} title={file.name} />
         ) : null}
-        {state === "preview_generating" && userOriginalUrl && file ? (
+        {state === "preview_generating" && !userPreviewUrl && userOriginalUrl && file ? (
           <PreviewGenerating original={userOriginalUrl} title={file.name} />
         ) : null}
-        {hasMatchingPreview && userOriginalUrl && userPreviewUrl && file ? (
+        {(previewAssetState === "preview_asset_loading" || hasMatchingPreview) && userOriginalUrl && userPreviewUrl && file ? (
           <ResultViewer
             original={userOriginalUrl}
             result={userPreviewUrl}
             originalLabel="Your original"
+            resultLabel="Free SVG Preview"
+            resultAlt="Free SVG preview"
             badge="Free SVG Preview"
             title={`${file.name} · ${cut === "single" ? "Single-Color SVG" : "Layered SVG"}`}
+            controlsEnabled={hasMatchingPreview}
+            onResultLoad={markPreviewLoaded}
+            onResultError={markPreviewFailed}
           />
+        ) : null}
+        {state === "preview_error" && previewAssetState === "preview_asset_error" ? (
+          <PreviewDisplayError onRetry={retryPreview} onChoose={() => input.current?.click()} />
+        ) : null}
+        {state === "preview_error" && previewAssetState !== "preview_asset_error" && userOriginalUrl && file ? (
+          <SelectedFilePlaceholder original={userOriginalUrl} title={file.name} />
         ) : null}
         {state === "demo" ? (
           <div className="sample-selector" aria-label="Example conversions">

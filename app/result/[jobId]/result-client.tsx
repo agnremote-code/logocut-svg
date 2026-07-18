@@ -13,6 +13,7 @@ import {
   PaymentStatus,
 } from "@/lib/job-types";
 import { ResultViewer } from "@/components/result-viewer";
+import { resolvePreviewAsset } from "@/lib/preview-asset";
 
 type ResultClientProps = {
   jobId: string;
@@ -54,6 +55,10 @@ export default function ResultClient({ jobId }: ResultClientProps) {
   const [resultError, setResultError] = useState("");
   const [isSvgReady, setIsSvgReady] = useState(false);
   const [isPreviewReady, setIsPreviewReady] = useState(false);
+  const [previewAssetUrl, setPreviewAssetUrl] = useState<string | null>(null);
+  const [previewAssetReady, setPreviewAssetReady] = useState(false);
+  const [previewAssetError, setPreviewAssetError] = useState(false);
+  const [previewAssetRetry, setPreviewAssetRetry] = useState(0);
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("unpaid");
   const [isStartingCheckout, setIsStartingCheckout] = useState(false);
   const [isPayPalScriptReady, setIsPayPalScriptReady] = useState(false);
@@ -202,6 +207,35 @@ export default function ResultClient({ jobId }: ResultClientProps) {
   }, [job?.imageBlob]);
 
   useEffect(() => {
+    if (!isPreviewReady || isSvgReady) {
+      setPreviewAssetUrl(null);
+      setPreviewAssetReady(false);
+      setPreviewAssetError(false);
+      return;
+    }
+
+    let active = true;
+    let objectUrl: string | null = null;
+    setPreviewAssetReady(false);
+    setPreviewAssetError(false);
+
+    resolvePreviewAsset(`/api/jobs/${jobId}/preview`)
+      .then((resolvedUrl) => {
+        objectUrl = resolvedUrl;
+        if (active) setPreviewAssetUrl(resolvedUrl);
+        else URL.revokeObjectURL(resolvedUrl);
+      })
+      .catch(() => {
+        if (active) setPreviewAssetError(true);
+      });
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [isPreviewReady, isSvgReady, jobId, previewAssetRetry]);
+
+  useEffect(() => {
     if (window.paypal) {
       setIsPayPalScriptReady(true);
     }
@@ -212,7 +246,7 @@ export default function ResultClient({ jobId }: ResultClientProps) {
       !isPayPalScriptReady ||
       !window.paypal ||
       !paypalButtonContainerRef.current ||
-      !isPreviewReady ||
+      !previewAssetReady ||
       isSvgReady ||
       paymentStatus === "paid"
     ) {
@@ -325,7 +359,7 @@ export default function ResultClient({ jobId }: ResultClientProps) {
   }, [
     activeCutType,
     isPayPalScriptReady,
-    isPreviewReady,
+    previewAssetReady,
     isSvgReady,
     jobId,
     paymentStatus,
@@ -333,6 +367,7 @@ export default function ResultClient({ jobId }: ResultClientProps) {
 
   const svgResultUrl = `/api/jobs/${jobId}/result`;
   const svgPreviewUrl = `/api/jobs/${jobId}/preview`;
+  const displayPreviewUrl = isSvgReady ? svgResultUrl : previewAssetUrl;
   const originalImageUrl = serverJob ? `/api/jobs/${jobId}/original` : previewUrl;
   const displayFileName = serverJob?.fileName ?? job?.fileName ?? "Uploaded logo";
   const downloadFileName = `${displayFileName.replace(/\.[^.]+$/, "")}-logocut.svg`;
@@ -398,19 +433,31 @@ export default function ResultClient({ jobId }: ResultClientProps) {
           </p>
         </div>
 
-        {originalImageUrl && (isSvgReady || isPreviewReady) ? (
+        {originalImageUrl && displayPreviewUrl ? (
           <div className="min-h-[620px] rounded-[20px] bg-white p-3 shadow-[0_18px_60px_rgba(31,37,32,0.10)]">
             <ResultViewer
               original={originalImageUrl}
-              result={isSvgReady ? svgResultUrl : svgPreviewUrl}
+              result={displayPreviewUrl}
               originalLabel="Your original"
+              resultLabel={isSvgReady ? "Clean SVG" : "Free SVG Preview"}
+              resultAlt={isSvgReady ? "Clean SVG" : "Free SVG preview"}
               badge={isSvgReady ? "Paid result available" : "Free Watermarked Preview"}
               title={displayFileName}
+              controlsEnabled={isSvgReady || previewAssetReady}
+              onResultLoad={() => {
+                if (!isSvgReady) setPreviewAssetReady(true);
+              }}
+              onResultError={() => {
+                if (!isSvgReady) {
+                  setPreviewAssetReady(false);
+                  setPreviewAssetError(true);
+                }
+              }}
             />
           </div>
         ) : null}
 
-        <div className={`grid gap-5 lg:grid-cols-[1fr_1fr] ${originalImageUrl && (isSvgReady || isPreviewReady) ? "hidden" : ""}`}>
+        <div className={`grid gap-5 lg:grid-cols-[1fr_1fr] ${originalImageUrl && displayPreviewUrl ? "hidden" : ""}`}>
           <section className="rounded-[8px] border border-[#ddd8cc] bg-white p-5 shadow-[0_18px_60px_rgba(31,37,32,0.10)] sm:p-6">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div className="min-w-0">
@@ -460,13 +507,13 @@ export default function ResultClient({ jobId }: ResultClientProps) {
               </h2>
             </div>
 
-            {isSvgReady || isPreviewReady ? (
+            {isSvgReady || previewAssetReady ? (
               <div className="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-[8px] border border-[#e0dbd1] bg-[#fbfaf7]">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   alt={isSvgReady ? "Clean SVG preview" : "Watermarked SVG preview"}
                   className="h-full w-full object-contain p-5"
-                  src={isSvgReady ? svgResultUrl : svgPreviewUrl}
+                  src={isSvgReady ? svgResultUrl : (previewAssetUrl ?? svgPreviewUrl)}
                 />
               </div>
             ) : (
@@ -488,12 +535,22 @@ export default function ResultClient({ jobId }: ResultClientProps) {
                   </svg>
                 </div>
                 <p className="mt-5 text-base font-semibold text-[#172017]">
-                  SVG is not ready
+                  {previewAssetError ? "Preview could not be displayed" : "Loading SVG preview"}
                 </p>
                 <p className="mt-2 max-w-sm text-sm leading-6 text-[#626a61]">
-                  {resultError ||
-                    "We couldn't create a preview from this image. Try a clearer logo."}
+                  {previewAssetError
+                    ? "The SVG was generated, but the preview file could not be loaded. Please try again."
+                    : resultError || "Preparing your watermarked SVG preview."}
                 </p>
+                {previewAssetError ? (
+                  <button
+                    className="secondary-button mt-4"
+                    type="button"
+                    onClick={() => setPreviewAssetRetry((value) => value + 1)}
+                  >
+                    Retry Preview
+                  </button>
+                ) : null}
               </div>
             )}
 
@@ -511,7 +568,7 @@ export default function ResultClient({ jobId }: ResultClientProps) {
               >
                 Download SVG
               </a>
-            ) : isPreviewReady && paymentStatus !== "paid" ? (
+            ) : previewAssetReady && paymentStatus !== "paid" ? (
               <div className="mt-5">
                 <div className="rounded-[8px] border border-[#d8c36b] bg-[#fff9dc] px-4 py-3">
                   <p className="text-sm font-semibold text-[#5c4710]">
@@ -551,7 +608,7 @@ export default function ResultClient({ jobId }: ResultClientProps) {
                   </button>
                 )}
               </div>
-            ) : (
+            ) : previewAssetError ? null : (
               <button
                 className="mt-5 flex h-14 w-full cursor-not-allowed items-center justify-center rounded-[8px] bg-[#8aa192] px-6 text-base font-semibold text-white"
                 type="button"
@@ -574,7 +631,7 @@ export default function ResultClient({ jobId }: ResultClientProps) {
                 We could not create the final SVG. Contact support for a
                 refund or manual help.
               </p>
-            ) : isPreviewReady ? (
+            ) : previewAssetReady ? (
               <p className="mt-4 rounded-[8px] border border-[#d8c36b] bg-[#fff9dc] px-4 py-3 text-sm font-semibold text-[#6a5414]">
                 Preview ready. If this looks good, unlock the clean SVG.
                 TEST MODE preview may contain a Vectorizer.AI watermark.
@@ -582,6 +639,10 @@ export default function ResultClient({ jobId }: ResultClientProps) {
                   ? ` Credits calculated: ${creditsCalculated}.`
                   : ""}
                 {creditsCharged ? ` Credits charged: ${creditsCharged}.` : ""}
+              </p>
+            ) : previewAssetError ? (
+              <p className="mt-4 rounded-[8px] border border-[#e4b5a8] bg-[#fff4f0] px-4 py-3 text-sm font-medium text-[#8a3426]">
+                Preview could not be displayed. Retry the preview before continuing.
               </p>
             ) : (
               <p className="mt-4 rounded-[8px] border border-[#e4b5a8] bg-[#fff4f0] px-4 py-3 text-sm font-medium text-[#8a3426]">

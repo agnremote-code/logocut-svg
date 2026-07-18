@@ -55,6 +55,8 @@ export async function GET(_request: Request, context: RouteContext) {
   return new Response(new Uint8Array(previewSvgBuffer), {
     headers: {
       "Content-Type": job.svgContentType ?? "image/svg+xml",
+      "Cache-Control": "private, no-store, max-age=0",
+      "X-Content-Type-Options": "nosniff",
     },
   });
 }

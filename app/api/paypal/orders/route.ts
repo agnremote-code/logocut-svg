@@ -4,6 +4,7 @@ import { createPayPalOrder, isPayPalNotConfiguredError } from "@/lib/paypal";
 import { getCutPrice } from "@/lib/pricing";
 import {
   getServerJob,
+  getServerJobOriginalImage,
   getStorageNotConfiguredResponseBody,
   getStorageWriteFailedResponseBody,
   hasServerJobFinalSvg,
@@ -12,6 +13,7 @@ import {
   isStorageWriteFailedError,
   savePayPalOrder,
 } from "@/lib/server-job-store";
+import { canCheckoutJob } from "@/lib/job-flow";
 
 export async function POST(request: Request) {
   let payload: { jobId?: string; cutType?: unknown };
@@ -70,11 +72,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Job already paid" }, { status: 409 });
   }
 
-  if (!hasServerJobPreviewSvg(job)) {
+  if (!hasServerJobPreviewSvg(job) || !canCheckoutJob(job)) {
     return NextResponse.json(
       { error: "Create a preview before checkout." },
       { status: 409 },
     );
+  }
+
+  if (job.settingsHash && job.previewSettingsHash !== job.settingsHash) {
+    return NextResponse.json(
+      { error: "Preview settings no longer match this job." },
+      { status: 409 },
+    );
+  }
+
+  if (!(await getServerJobOriginalImage(job))) {
+    return NextResponse.json({ error: "Original image is not available." }, { status: 409 });
   }
 
   if (job.paypalOrderId) {

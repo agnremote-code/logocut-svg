@@ -13,6 +13,7 @@ import {
 } from "@/lib/job-types";
 import { trackEvent } from "@/lib/analytics";
 import { resolvePreviewAsset } from "@/lib/preview-asset";
+import { PayPalCheckout } from "@/components/paypal-checkout";
 
 const samples = [
   ["northline", "Logo", "Northline Studio"],
@@ -92,6 +93,7 @@ function PreviewDisplayError({ onRetry, onChoose }: { onRetry: () => void; onCho
 export function ConversionStudio() {
   const input = useRef<HTMLInputElement>(null);
   const studio = useRef<HTMLElement>(null);
+  const previewDisplayedJobRef = useRef("");
   const [state, setState] = useState<StudioState>("demo");
   const [sample, setSample] = useState(0);
   const [file, setFile] = useState<File | null>(null);
@@ -283,6 +285,10 @@ export function ConversionStudio() {
   const markPreviewLoaded = () => {
     setPreviewAssetState("preview_asset_ready");
     setState("preview_ready");
+    if (jobId && previewDisplayedJobRef.current !== jobId) {
+      previewDisplayedJobRef.current = jobId;
+      trackEvent("preview_displayed", { cut_type: cut, source_page: "conversion_studio" });
+    }
   };
 
   const markPreviewFailed = () => {
@@ -378,6 +384,7 @@ export function ConversionStudio() {
         {hasMatchingPreview ? (
           <div className="purchase-summary">
             <span className="success-pill">Free Watermarked Preview</span>
+            <h2>Unlock Your Clean SVG</h2>
             <h3>{cut === "single" ? "Single-Color SVG" : "Layered SVG"}</h3>
             <strong className="purchase-price">
               {cut === "single" ? "$5" : "$9"} <small>one-time</small>
@@ -387,9 +394,7 @@ export function ConversionStudio() {
               <li>Instant download after processing</li>
               <li>No subscription</li>
             </ul>
-            <a className="primary-button" href={`/result/${jobId}`}>
-              Unlock Clean SVG
-            </a>
+            <PayPalCheckout jobId={jobId} cutType={cut} />
             <button className="text-button" onClick={() => setState("file_selected")}>
               Adjust Settings
             </button>

@@ -5,6 +5,7 @@ import {
   getStorageNotConfiguredResponseBody,
   isStorageNotConfiguredError,
 } from "@/lib/server-job-store";
+import { canDownloadJob } from "@/lib/job-flow";
 
 type RouteContext = {
   params: Promise<{
@@ -41,6 +42,10 @@ export async function GET(_request: Request, context: RouteContext) {
 
   if (!job) {
     return NextResponse.json({ error: "Job not found." }, { status: 404 });
+  }
+
+  if (!canDownloadJob(job)) {
+    return NextResponse.json({ error: "Clean SVG is not available before payment." }, { status: 403 });
   }
 
   if (job.status === "failed" && job.finalError) {

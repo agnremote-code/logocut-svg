@@ -21,6 +21,10 @@ type AnalyticsEventName =
   | "cut_preview_background_changed"
   | "preview_zoom_used"
   | "preview_regenerated"
+  | "preview_displayed"
+  | "checkout_viewed"
+  | "final_svg_generation_started"
+  | "final_svg_ready"
   | "purchase";
 
 type AnalyticsParams = {

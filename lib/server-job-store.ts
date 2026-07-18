@@ -10,10 +10,24 @@ import {
   JobSummary,
   PaymentStatus,
 } from "@/lib/job-types";
+import { createHash } from "node:crypto";
+import { canonicalStateForLegacyJob } from "@/lib/job-flow";
 import { getCutPrice } from "@/lib/pricing";
 
 type VectorizerMode = "test" | "production";
 type StoredFileStatus = "not_started" | "processing" | "ready" | "failed";
+export type CanonicalJobState =
+  | "uploaded"
+  | "preview_generating"
+  | "preview_ready"
+  | "checkout_ready"
+  | "payment_processing"
+  | "paid"
+  | "final_svg_generating"
+  | "final_svg_ready"
+  | "preview_failed"
+  | "payment_failed"
+  | "final_svg_failed";
 
 export type ServerJobRecord = JobSummary & {
   jobId: string;
@@ -50,6 +64,11 @@ export type ServerJobRecord = JobSummary & {
   vectorizerStatus?: number;
   errorMessages: string[];
   updatedAt: string;
+  canonicalState?: CanonicalJobState;
+  sourceHash?: string;
+  settingsHash?: string;
+  previewSettingsHash?: string;
+  previewGeneratedAt?: string;
 };
 
 type MemoryServerJobRecord = ServerJobRecord & {
@@ -377,6 +396,9 @@ function createBaseJob(input: CreateServerJobInput): ServerJobRecord {
     previewStatus: "not_started",
     finalStatus: "not_started",
     errorMessages: [],
+    canonicalState: "uploaded",
+    sourceHash: createHash("sha256").update(input.imageBuffer).digest("hex"),
+    settingsHash: createHash("sha256").update(`output:${input.cutType}`).digest("hex"),
   };
 }
 
@@ -549,7 +571,9 @@ export async function getServerJob(jobId: string) {
 
     const metadataText = await new Response(metadata.stream).text();
 
-    return JSON.parse(metadataText) as ServerJobRecord;
+    const job = JSON.parse(metadataText) as ServerJobRecord;
+    job.canonicalState = canonicalStateForLegacyJob(job);
+    return job;
   } catch (error) {
     if (error instanceof BlobNotFoundError) {
       return null;
@@ -571,6 +595,7 @@ export async function saveCheckoutSession({
     job.paymentProvider = "stripe";
     job.paymentStatus = "unpaid";
     job.status = "awaiting_payment";
+    job.canonicalState = "checkout_ready";
   });
 }
 
@@ -605,6 +630,7 @@ export async function savePayPalOrder({
     job.paypalOrderId = paypalOrderId;
     job.paymentStatus = "unpaid";
     job.status = "awaiting_payment";
+    job.canonicalState = "checkout_ready";
   });
 }
 
@@ -633,6 +659,7 @@ export async function markServerJobPaidWithPayPal({
 
     if (status) {
       job.status = status;
+      job.canonicalState = status === "processing" ? "final_svg_generating" : "paid";
       return;
     }
 
@@ -648,10 +675,12 @@ export async function updateServerJobStatus(jobId: string, status: JobStatus) {
 
     if (status === "previewing") {
       job.previewStatus = "processing";
+      job.canonicalState = "preview_generating";
     }
 
     if (status === "processing") {
       job.finalStatus = "processing";
+      job.canonicalState = "final_svg_generating";
     }
   });
 }
@@ -678,6 +707,9 @@ export async function saveServerJobPreviewSvg({
 
     job.status = "preview_ready";
     job.previewStatus = "ready";
+    job.canonicalState = "preview_ready";
+    job.previewSettingsHash = job.settingsHash;
+    job.previewGeneratedAt = new Date().toISOString();
     job.previewPathname = previewFile?.pathname ?? job.previewPathname;
     job.previewBlobPath = previewFile?.pathname ?? job.previewBlobPath;
     job.previewSvgUrl = previewFile?.url ?? job.previewSvgUrl;
@@ -719,6 +751,7 @@ export async function saveServerJobFinalSvg({
 
     job.status = "ready";
     job.finalStatus = "ready";
+    job.canonicalState = "final_svg_ready";
     job.finalSvgPathname = finalFile?.pathname ?? job.finalSvgPathname;
     job.finalPathname = finalFile?.pathname ?? job.finalPathname;
     job.finalBlobPath = finalFile?.pathname ?? job.finalBlobPath;
@@ -759,10 +792,12 @@ export async function saveServerJobError({
       job.previewStatus = "failed";
       job.previewError = error;
       job.previewHttpStatus = status;
+      job.canonicalState = "preview_failed";
     } else {
       job.finalStatus = "failed";
       job.finalError = error;
       job.finalHttpStatus = status;
+      job.canonicalState = job.paymentStatus === "paid" ? "final_svg_failed" : "payment_failed";
     }
 
     job.vectorizerError = error;

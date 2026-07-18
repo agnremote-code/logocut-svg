@@ -366,6 +366,7 @@ export default function ResultClient({ jobId }: ResultClientProps) {
   ]);
 
   const svgResultUrl = `/api/jobs/${jobId}/result`;
+  const svgDownloadUrl = `/api/jobs/${jobId}/download`;
   const svgPreviewUrl = `/api/jobs/${jobId}/preview`;
   const displayPreviewUrl = isSvgReady ? svgResultUrl : previewAssetUrl;
   const originalImageUrl = serverJob ? `/api/jobs/${jobId}/original` : previewUrl;
@@ -501,9 +502,9 @@ export default function ResultClient({ jobId }: ResultClientProps) {
                 <h2 className="mt-2 text-xl font-semibold text-[#172017]">
                 {isSvgReady
                   ? "Clean SVG ready"
-                  : isPreviewReady
-                    ? "Watermarked preview"
-                    : "Preview unavailable"}
+                  : previewAssetReady
+                    ? "Free SVG Preview"
+                    : "Loading SVG preview"}
               </h2>
             </div>
 
@@ -558,7 +559,7 @@ export default function ResultClient({ jobId }: ResultClientProps) {
               <a
                 className="mt-5 flex h-14 w-full items-center justify-center rounded-[8px] bg-[#315f46] px-6 text-base font-semibold text-white shadow-[0_10px_24px_rgba(49,95,70,0.22)] transition hover:bg-[#264d39]"
                 download={downloadFileName}
-                href={svgResultUrl}
+                href={svgDownloadUrl}
                 onClick={() =>
                   trackEvent("svg_downloaded", {
                     cut_type: activeCutType,
@@ -608,15 +609,7 @@ export default function ResultClient({ jobId }: ResultClientProps) {
                   </button>
                 )}
               </div>
-            ) : previewAssetError ? null : (
-              <button
-                className="mt-5 flex h-14 w-full cursor-not-allowed items-center justify-center rounded-[8px] bg-[#8aa192] px-6 text-base font-semibold text-white"
-                type="button"
-                disabled
-              >
-                Download SVG
-              </button>
-            )}
+            ) : null}
 
             {isSvgReady ? (
               <p className="mt-4 rounded-[8px] border border-[#c9dfcf] bg-[#f1f8f2] px-4 py-3 text-sm font-semibold text-[#315f46]">

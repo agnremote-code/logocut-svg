@@ -149,6 +149,14 @@ export async function POST(_request: Request, context: RouteContext) {
   return NextResponse.json({
     job: readyJob ? toJobSummary(readyJob) : null,
     mode: result.mode,
+    previewAsset:
+      result.mode === "test"
+        ? {
+            reference: `/api/jobs/${jobId}/preview`,
+            contentType: result.contentType,
+            base64: result.svg.toString("base64"),
+          }
+        : null,
     creditsCalculated: result.creditsCalculated,
     creditsCharged: result.creditsCharged,
   });

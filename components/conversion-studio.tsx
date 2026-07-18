@@ -237,16 +237,29 @@ export function ConversionStudio() {
       const previewResponse = await fetch(`/api/jobs/${createPayload.job.id}/vectorize`, {
         method: "POST",
       });
-      const previewPayload = (await previewResponse.json()) as { error?: string };
+      const previewPayload = (await previewResponse.json()) as {
+        error?: string;
+        previewAsset?: {
+          reference?: string;
+          contentType?: string;
+          base64?: string;
+        } | null;
+      };
       if (!previewResponse.ok) {
         throw new Error(previewPayload.error ?? "We couldn't create this preview.");
       }
 
       setJobId(createPayload.job.id);
       setPreviewCut(cut);
-      const reference = `/api/jobs/${createPayload.job.id}/preview`;
+      const reference =
+        previewPayload.previewAsset?.reference ?? `/api/jobs/${createPayload.job.id}/preview`;
       setPreviewReference(reference);
-      await loadPreviewAsset(reference);
+      const immediatePreview =
+        previewPayload.previewAsset?.base64 &&
+        previewPayload.previewAsset.contentType === "image/svg+xml"
+          ? `data:image/svg+xml;base64,${previewPayload.previewAsset.base64}`
+          : reference;
+      await loadPreviewAsset(immediatePreview);
       trackEvent("preview_generated", {
         source_page: "homepage_studio",
         cut_type: cut,

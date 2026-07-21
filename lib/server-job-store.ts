@@ -8,11 +8,15 @@ import {
   CutType,
   JobStatus,
   JobSummary,
+  OneTimeProductType,
+  OutputType,
   PaymentStatus,
+  getDefaultProductTypeForOutput,
+  getProductOutputTypes,
 } from "@/lib/job-types";
 import { createHash } from "node:crypto";
 import { canonicalStateForLegacyJob } from "@/lib/job-flow";
-import { getCutPrice } from "@/lib/pricing";
+import { getOneTimeProductPrice } from "@/lib/pricing";
 
 type VectorizerMode = "test" | "production";
 type StoredFileStatus = "not_started" | "processing" | "ready" | "failed";
@@ -32,6 +36,7 @@ export type CanonicalJobState =
 export type ServerJobRecord = JobSummary & {
   jobId: string;
   price: string;
+  productType?: OneTimeProductType;
   paymentStatus: PaymentStatus;
   paymentProvider?: "stripe" | "paypal";
   previewStatus: StoredFileStatus;
@@ -52,6 +57,14 @@ export type ServerJobRecord = JobSummary & {
   previewBlobPath?: string;
   previewSvgUrl?: string;
   finalSvgPathname?: string;
+  finalSingleStatus?: StoredFileStatus;
+  finalSinglePathname?: string;
+  finalSingleSvgUrl?: string;
+  finalSingleError?: string;
+  finalMultiStatus?: StoredFileStatus;
+  finalMultiPathname?: string;
+  finalMultiSvgUrl?: string;
+  finalMultiError?: string;
   finalPathname?: string;
   finalBlobPath?: string;
   finalSvgUrl?: string;
@@ -75,6 +88,8 @@ type MemoryServerJobRecord = ServerJobRecord & {
   imageBuffer: Buffer;
   previewSvgBuffer?: Buffer;
   finalSvgBuffer?: Buffer;
+  finalSingleSvgBuffer?: Buffer;
+  finalMultiSvgBuffer?: Buffer;
 };
 
 type CreateServerJobInput = {
@@ -82,6 +97,7 @@ type CreateServerJobInput = {
   fileType: string;
   fileSize: number;
   cutType: CutType;
+  productType?: OneTimeProductType;
   imageBuffer: Buffer;
 };
 
@@ -91,6 +107,10 @@ type SaveSvgInput = {
   creditsCalculated: string | null;
   creditsCharged: string | null;
   paypalPayment?: PayPalPaymentMetadata;
+};
+
+type SaveFinalOutputInput = SaveSvgInput & {
+  outputType: OutputType;
 };
 
 type PayPalPaymentMetadata = {
@@ -380,6 +400,7 @@ function getOriginalFileName(input: Pick<CreateServerJobInput, "fileName" | "fil
 function createBaseJob(input: CreateServerJobInput): ServerJobRecord {
   const jobId = crypto.randomUUID();
   const now = new Date().toISOString();
+  const productType = input.productType ?? getDefaultProductTypeForOutput(input.cutType);
 
   return {
     id: jobId,
@@ -388,18 +409,87 @@ function createBaseJob(input: CreateServerJobInput): ServerJobRecord {
     fileType: input.fileType,
     fileSize: input.fileSize,
     cutType: input.cutType,
-    price: getCutPrice(input.cutType).label,
+    productType,
+    price: getOneTimeProductPrice(productType).label,
     createdAt: now,
     updatedAt: now,
     status: "created",
     paymentStatus: "unpaid",
     previewStatus: "not_started",
     finalStatus: "not_started",
+    finalSingleStatus: "not_started",
+    finalMultiStatus: "not_started",
     errorMessages: [],
     canonicalState: "uploaded",
     sourceHash: createHash("sha256").update(input.imageBuffer).digest("hex"),
     settingsHash: createHash("sha256").update(`output:${input.cutType}`).digest("hex"),
   };
+}
+
+export function getServerJobProductType(job: Pick<ServerJobRecord, "productType" | "cutType">) {
+  return job.productType ?? getDefaultProductTypeForOutput(job.cutType);
+}
+
+export function getServerJobProductPrice(job: Pick<ServerJobRecord, "productType" | "cutType">) {
+  return getOneTimeProductPrice(getServerJobProductType(job));
+}
+
+export function getServerJobOutputTypes(job: Pick<ServerJobRecord, "productType" | "cutType">) {
+  return getProductOutputTypes(getServerJobProductType(job));
+}
+
+function getFinalOutputPath(job: ServerJobRecord, outputType: OutputType) {
+  if (outputType === "single") {
+    return job.finalSinglePathname;
+  }
+
+  return job.finalMultiPathname;
+}
+
+function getMemoryFinalOutput(job: MemoryServerJobRecord, outputType: OutputType) {
+  return outputType === "single" ? job.finalSingleSvgBuffer : job.finalMultiSvgBuffer;
+}
+
+function hasFinalOutput(job: ServerJobRecord, outputType: OutputType) {
+  if (isMemoryJob(job)) {
+    return Boolean(getMemoryFinalOutput(job, outputType));
+  }
+
+  return Boolean(getFinalOutputPath(job, outputType));
+}
+
+function setFinalOutputFields({
+  job,
+  outputType,
+  svgBuffer,
+  pathname,
+  url,
+}: {
+  job: ServerJobRecord;
+  outputType: OutputType;
+  svgBuffer: Buffer;
+  pathname?: string;
+  url?: string;
+}) {
+  if (isMemoryJob(job)) {
+    if (outputType === "single") {
+      job.finalSingleSvgBuffer = svgBuffer;
+    } else {
+      job.finalMultiSvgBuffer = svgBuffer;
+    }
+  }
+
+  if (outputType === "single") {
+    job.finalSingleStatus = "ready";
+    job.finalSinglePathname = pathname ?? job.finalSinglePathname;
+    job.finalSingleSvgUrl = url ?? job.finalSingleSvgUrl;
+    job.finalSingleError = undefined;
+  } else {
+    job.finalMultiStatus = "ready";
+    job.finalMultiPathname = pathname ?? job.finalMultiPathname;
+    job.finalMultiSvgUrl = url ?? job.finalMultiSvgUrl;
+    job.finalMultiError = undefined;
+  }
 }
 
 function applyPayPalPaymentMetadata(
@@ -621,11 +711,18 @@ export async function markServerJobPaid({
 export async function savePayPalOrder({
   jobId,
   paypalOrderId,
+  productType,
 }: {
   jobId: string;
   paypalOrderId: string;
+  productType?: OneTimeProductType;
 }) {
   return updateServerJob(jobId, (job) => {
+    if (productType) {
+      job.productType = productType;
+      job.price = getOneTimeProductPrice(productType).label;
+    }
+
     job.paymentProvider = "paypal";
     job.paypalOrderId = paypalOrderId;
     job.paymentStatus = "unpaid";
@@ -681,6 +778,15 @@ export async function updateServerJobStatus(jobId: string, status: JobStatus) {
     if (status === "processing") {
       job.finalStatus = "processing";
       job.canonicalState = "final_svg_generating";
+      for (const outputType of getServerJobOutputTypes(job)) {
+        if (outputType === "single" && !hasFinalOutput(job, "single")) {
+          job.finalSingleStatus = "processing";
+        }
+
+        if (outputType === "multi" && !hasFinalOutput(job, "multi")) {
+          job.finalMultiStatus = "processing";
+        }
+      }
     }
   });
 }
@@ -767,18 +873,72 @@ export async function saveServerJobFinalSvg({
   });
 }
 
+export async function saveServerJobFinalOutputSvg({
+  jobId,
+  outputType,
+  svgBuffer,
+  creditsCalculated,
+  creditsCharged,
+  paypalPayment,
+}: SaveFinalOutputInput) {
+  const filename = outputType === "single" ? "single.svg" : "layered.svg";
+  const finalFile = shouldUseMemoryStorage()
+    ? undefined
+    : await putDurableFile({
+        jobId,
+        filename,
+        body: svgBuffer,
+        contentType: "image/svg+xml",
+      });
+
+  return updateServerJob(jobId, (job) => {
+    if (paypalPayment) {
+      applyPayPalPaymentMetadata(job, paypalPayment);
+    }
+
+    setFinalOutputFields({
+      job,
+      outputType,
+      svgBuffer,
+      pathname: finalFile?.pathname,
+      url: finalFile?.url,
+    });
+
+    const expectedOutputs = getServerJobOutputTypes(job);
+    const allExpectedOutputsReady = expectedOutputs.every((expectedOutput) =>
+      hasFinalOutput(job, expectedOutput),
+    );
+
+    job.finalStatus = allExpectedOutputsReady ? "ready" : "processing";
+    job.status = allExpectedOutputsReady ? "ready" : "processing";
+    job.canonicalState = allExpectedOutputsReady
+      ? "final_svg_ready"
+      : "final_svg_generating";
+    job.svgContentType = "image/svg+xml";
+    job.vectorizerMode = "production";
+    job.finalError = undefined;
+    job.finalHttpStatus = undefined;
+    job.creditsCalculated = creditsCalculated;
+    job.creditsCharged = creditsCharged;
+    job.vectorizerError = undefined;
+    job.vectorizerStatus = undefined;
+  });
+}
+
 export async function saveServerJobError({
   jobId,
   error,
   status,
   stage = "final",
   paypalPayment,
+  outputType,
 }: {
   jobId: string;
   error: string;
   status?: number;
   stage?: "preview" | "final";
   paypalPayment?: PayPalPaymentMetadata;
+  outputType?: OutputType;
 }) {
   return updateServerJob(jobId, (job) => {
     if (paypalPayment) {
@@ -797,6 +957,15 @@ export async function saveServerJobError({
       job.finalStatus = "failed";
       job.finalError = error;
       job.finalHttpStatus = status;
+      if (outputType === "single") {
+        job.finalSingleStatus = "failed";
+        job.finalSingleError = error;
+      }
+
+      if (outputType === "multi") {
+        job.finalMultiStatus = "failed";
+        job.finalMultiError = error;
+      }
       job.canonicalState = job.paymentStatus === "paid" ? "final_svg_failed" : "payment_failed";
     }
 
@@ -821,7 +990,18 @@ export async function getServerJobPreviewSvg(job: ServerJobRecord) {
   return readDurableFile(job.previewPathname ?? job.previewBlobPath);
 }
 
-export async function getServerJobFinalSvg(job: ServerJobRecord) {
+export async function getServerJobFinalSvg(
+  job: ServerJobRecord,
+  outputType?: OutputType,
+) {
+  if (outputType) {
+    if (isMemoryJob(job)) {
+      return getMemoryFinalOutput(job, outputType) ?? null;
+    }
+
+    return readDurableFile(getFinalOutputPath(job, outputType));
+  }
+
   if (isMemoryJob(job)) {
     return job.finalSvgBuffer ?? null;
   }
@@ -838,11 +1018,41 @@ export function hasServerJobPreviewSvg(job: ServerJobRecord) {
 }
 
 export function hasServerJobFinalSvg(job: ServerJobRecord) {
+  const productType = getServerJobProductType(job);
+
+  if (productType === "complete_pack") {
+    return getServerJobOutputTypes(job).every((outputType) =>
+      hasFinalOutput(job, outputType),
+    );
+  }
+
   return Boolean(
     job.finalPathname ||
       job.finalBlobPath ||
       (isMemoryJob(job) && job.finalSvgBuffer),
   );
+}
+
+export function hasServerJobFinalOutputSvg(
+  job: ServerJobRecord,
+  outputType: OutputType,
+) {
+  return hasFinalOutput(job, outputType);
+}
+
+export function getServerJobFinalOutputStatuses(job: ServerJobRecord) {
+  return {
+    single: {
+      ready: hasFinalOutput(job, "single"),
+      status: job.finalSingleStatus ?? "not_started",
+      error: job.finalSingleError ?? null,
+    },
+    multi: {
+      ready: hasFinalOutput(job, "multi"),
+      status: job.finalMultiStatus ?? "not_started",
+      error: job.finalMultiError ?? null,
+    },
+  };
 }
 
 export function toJobSummary(job: ServerJobRecord): JobSummary {
@@ -852,6 +1062,7 @@ export function toJobSummary(job: ServerJobRecord): JobSummary {
     fileType: job.fileType,
     fileSize: job.fileSize,
     cutType: job.cutType,
+    productType: getServerJobProductType(job),
     createdAt: job.createdAt,
     status: job.status,
     paymentStatus: job.paymentStatus,

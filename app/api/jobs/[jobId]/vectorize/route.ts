@@ -2,10 +2,14 @@ import { NextResponse } from "next/server";
 import {
   getServerJobOriginalImage,
   getServerJob,
+  getServerJobOutputTypes,
+  getServerJobProductType,
   getStorageNotConfiguredResponseBody,
+  hasServerJobFinalOutputSvg,
   hasServerJobFinalSvg,
   hasServerJobPreviewSvg,
   isStorageNotConfiguredError,
+  saveServerJobFinalOutputSvg,
   saveServerJobFinalSvg,
   saveServerJobError,
   saveServerJobPreviewSvg,
@@ -79,6 +83,66 @@ export async function POST(_request: Request, context: RouteContext) {
       { error: "Original image is not available for this job." },
       { status: 409 },
     );
+  }
+
+  if (mode === "production" && getServerJobProductType(job) === "complete_pack") {
+    let workingJob = job;
+    const failedOutputs: string[] = [];
+
+    for (const outputType of getServerJobOutputTypes(job)) {
+      if (hasServerJobFinalOutputSvg(workingJob, outputType)) {
+        continue;
+      }
+
+      const result = await vectorizeImage({
+        imageBuffer,
+        filename: job.fileName,
+        cutType: outputType,
+        contentType: job.fileType,
+        mode,
+      });
+
+      if (!result.ok) {
+        failedOutputs.push(outputType);
+        workingJob =
+          (await saveServerJobError({
+            jobId,
+            error: result.error,
+            status: result.status,
+            stage: "final",
+            outputType,
+          })) ?? workingJob;
+        continue;
+      }
+
+      workingJob =
+        (await saveServerJobFinalOutputSvg({
+          jobId,
+          outputType,
+          svgBuffer: result.svg,
+          creditsCalculated: result.creditsCalculated,
+          creditsCharged: result.creditsCharged,
+        })) ?? workingJob;
+    }
+
+    if (failedOutputs.length > 0) {
+      return NextResponse.json(
+        {
+          error: "We couldn't create the final SVG. Contact support for a refund or manual help.",
+          failedOutputs,
+          job: toJobSummary(workingJob),
+        },
+        { status: 502 },
+      );
+    }
+
+    return NextResponse.json({
+      job: toJobSummary(workingJob),
+      mode,
+      previewAsset: null,
+      creditsCalculated: workingJob.creditsCalculated ?? null,
+      creditsCharged: workingJob.creditsCharged ?? null,
+    });
   }
 
   const result = await vectorizeImage({

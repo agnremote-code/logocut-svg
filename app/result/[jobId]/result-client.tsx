@@ -10,7 +10,10 @@ import {
   CUT_OPTIONS,
   CutType,
   JobSummary,
+  ONE_TIME_PRODUCT_OPTIONS,
+  OneTimeProductType,
   PaymentStatus,
+  getDefaultProductTypeForOutput,
 } from "@/lib/job-types";
 import { ResultViewer } from "@/components/result-viewer";
 import { resolvePreviewAsset } from "@/lib/preview-asset";
@@ -71,8 +74,17 @@ export default function ResultClient({ jobId }: ResultClientProps) {
     value: number;
     currency: string;
   } | null>(null);
+  const [productType, setProductType] =
+    useState<OneTimeProductType>("single_svg");
+  const [finalOutputs, setFinalOutputs] = useState<{
+    single?: { ready?: boolean; status?: string; error?: string | null };
+    multi?: { ready?: boolean; status?: string; error?: string | null };
+  } | null>(null);
   const paypalClientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID;
   const activeCutType: CutType = serverJob?.cutType ?? job?.cutType ?? "single";
+  const activeProduct = ONE_TIME_PRODUCT_OPTIONS.find(
+    (option) => option.id === productType,
+  );
   const paypalSdkUrl = paypalClientId
     ? `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(
         paypalClientId,
@@ -115,6 +127,11 @@ export default function ResultClient({ jobId }: ResultClientProps) {
             value?: number;
             currency?: string;
           } | null;
+          productType?: OneTimeProductType;
+          finalOutputs?: {
+            single?: { ready?: boolean; status?: string; error?: string | null };
+            multi?: { ready?: boolean; status?: string; error?: string | null };
+          };
           error?: string;
         };
 
@@ -127,6 +144,14 @@ export default function ResultClient({ jobId }: ResultClientProps) {
         setIsPreviewReady(Boolean(payload.previewReady));
         setIsSvgReady(Boolean(payload.svgReady));
         setPaymentStatus(payload.paymentStatus ?? "unpaid");
+        setProductType(
+          payload.productType ??
+            payload.job?.productType ??
+            getDefaultProductTypeForOutput(
+              payload.job?.cutType ?? storedJob?.cutType ?? "single",
+            ),
+        );
+        setFinalOutputs(payload.finalOutputs ?? null);
         setResultError(
           payload.finalError ??
             payload.previewError ??
@@ -273,7 +298,7 @@ export default function ResultClient({ jobId }: ResultClientProps) {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ jobId, cutType: activeCutType }),
+          body: JSON.stringify({ jobId, cutType: activeCutType, productType }),
         });
         const payload = (await response.json()) as {
           orderId?: string;
@@ -289,8 +314,14 @@ export default function ResultClient({ jobId }: ResultClientProps) {
 
         trackEvent("paypal_order_created", {
           cut_type: activeCutType,
+          product_type: productType,
           source_page: "result_page",
-          value: activeCutType === "multi" ? 9 : 5,
+          value:
+            productType === "complete_pack"
+              ? 12
+              : productType === "layered_svg"
+                ? 9
+                : 5,
           currency: "USD",
         });
 
@@ -363,19 +394,25 @@ export default function ResultClient({ jobId }: ResultClientProps) {
     isSvgReady,
     jobId,
     paymentStatus,
+    productType,
   ]);
 
-  const svgResultUrl = `/api/jobs/${jobId}/result`;
+  const isCompletePack = productType === "complete_pack";
+  const singleDownloadReady = Boolean(finalOutputs?.single?.ready);
+  const layeredDownloadReady = Boolean(finalOutputs?.multi?.ready);
+  const hasAnyCompleteOutput =
+    isCompletePack && (singleDownloadReady || layeredDownloadReady);
+  const svgResultUrl = isCompletePack
+    ? `/api/jobs/${jobId}/result?output=${singleDownloadReady ? "single" : "multi"}`
+    : `/api/jobs/${jobId}/result`;
   const svgDownloadUrl = `/api/jobs/${jobId}/download`;
   const svgPreviewUrl = `/api/jobs/${jobId}/preview`;
-  const displayPreviewUrl = isSvgReady ? svgResultUrl : previewAssetUrl;
+  const displayPreviewUrl =
+    isSvgReady || hasAnyCompleteOutput ? svgResultUrl : previewAssetUrl;
   const originalImageUrl = serverJob ? `/api/jobs/${jobId}/original` : previewUrl;
   const displayFileName = serverJob?.fileName ?? job?.fileName ?? "Uploaded logo";
   const downloadFileName = `${displayFileName.replace(/\.[^.]+$/, "")}-logocut.svg`;
-  const unlockLabel =
-    activeCutType === "multi"
-      ? "Unlock with PayPal - $9"
-      : "Unlock with PayPal - $5";
+  const unlockLabel = `Unlock with PayPal - ${activeProduct?.price ?? "$5"}`;
   const finalGenerationFailed =
     paymentStatus === "paid" && !isSvgReady && Boolean(resultError);
 
@@ -440,9 +477,23 @@ export default function ResultClient({ jobId }: ResultClientProps) {
               original={originalImageUrl}
               result={displayPreviewUrl}
               originalLabel="Your original"
-              resultLabel={isSvgReady ? "Clean SVG" : "Free SVG Preview"}
-              resultAlt={isSvgReady ? "Clean SVG" : "Free SVG preview"}
-              badge={isSvgReady ? "Paid result available" : "Free Watermarked Preview"}
+              resultLabel={
+                isSvgReady || hasAnyCompleteOutput
+                  ? "Clean SVG"
+                  : "Free SVG Preview"
+              }
+              resultAlt={
+                isSvgReady || hasAnyCompleteOutput
+                  ? "Clean SVG"
+                  : "Free SVG preview"
+              }
+              badge={
+                isSvgReady
+                  ? "Paid result available"
+                  : hasAnyCompleteOutput
+                    ? "Partial result available"
+                    : "Free Watermarked Preview"
+              }
               title={displayFileName}
               controlsEnabled={isSvgReady || previewAssetReady}
               onResultLoad={() => {
@@ -508,13 +559,17 @@ export default function ResultClient({ jobId }: ResultClientProps) {
               </h2>
             </div>
 
-            {isSvgReady || previewAssetReady ? (
+            {isSvgReady || hasAnyCompleteOutput || previewAssetReady ? (
               <div className="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-[8px] border border-[#e0dbd1] bg-[#fbfaf7]">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   alt={isSvgReady ? "Clean SVG preview" : "Watermarked SVG preview"}
                   className="h-full w-full object-contain p-5"
-                  src={isSvgReady ? svgResultUrl : (previewAssetUrl ?? svgPreviewUrl)}
+                  src={
+                    isSvgReady || hasAnyCompleteOutput
+                      ? svgResultUrl
+                      : (previewAssetUrl ?? svgPreviewUrl)
+                  }
                 />
               </div>
             ) : (
@@ -555,20 +610,62 @@ export default function ResultClient({ jobId }: ResultClientProps) {
               </div>
             )}
 
-            {isSvgReady ? (
-              <a
-                className="mt-5 flex h-14 w-full items-center justify-center rounded-[8px] bg-[#315f46] px-6 text-base font-semibold text-white shadow-[0_10px_24px_rgba(49,95,70,0.22)] transition hover:bg-[#264d39]"
-                download={downloadFileName}
-                href={svgDownloadUrl}
-                onClick={() =>
-                  trackEvent("svg_downloaded", {
-                    cut_type: activeCutType,
-                    source_page: "result_page",
-                  })
-                }
-              >
-                Download SVG
-              </a>
+            {isSvgReady || hasAnyCompleteOutput ? (
+              isCompletePack ? (
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                  <a
+                    className={`flex h-14 items-center justify-center rounded-[8px] px-5 text-center text-sm font-semibold shadow-[0_10px_24px_rgba(49,95,70,0.18)] transition ${
+                      singleDownloadReady
+                        ? "bg-[#315f46] text-white hover:bg-[#264d39]"
+                        : "pointer-events-none bg-[#d8ded8] text-[#6b746d]"
+                    }`}
+                    download={`${displayFileName.replace(/\.[^.]+$/, "")}-single-color-logocut.svg`}
+                    href={`${svgDownloadUrl}?output=single`}
+                    onClick={() =>
+                      trackEvent("svg_downloaded", {
+                        cut_type: "single",
+                        product_type: productType,
+                        source_page: "result_page",
+                      })
+                    }
+                  >
+                    Download Single-Color SVG
+                  </a>
+                  <a
+                    className={`flex h-14 items-center justify-center rounded-[8px] px-5 text-center text-sm font-semibold shadow-[0_10px_24px_rgba(49,95,70,0.18)] transition ${
+                      layeredDownloadReady
+                        ? "bg-[#315f46] text-white hover:bg-[#264d39]"
+                        : "pointer-events-none bg-[#d8ded8] text-[#6b746d]"
+                    }`}
+                    download={`${displayFileName.replace(/\.[^.]+$/, "")}-layered-logocut.svg`}
+                    href={`${svgDownloadUrl}?output=multi`}
+                    onClick={() =>
+                      trackEvent("svg_downloaded", {
+                        cut_type: "multi",
+                        product_type: productType,
+                        source_page: "result_page",
+                      })
+                    }
+                  >
+                    Download Layered SVG
+                  </a>
+                </div>
+              ) : (
+                <a
+                  className="mt-5 flex h-14 w-full items-center justify-center rounded-[8px] bg-[#315f46] px-6 text-base font-semibold text-white shadow-[0_10px_24px_rgba(49,95,70,0.22)] transition hover:bg-[#264d39]"
+                  download={downloadFileName}
+                  href={svgDownloadUrl}
+                  onClick={() =>
+                    trackEvent("svg_downloaded", {
+                      cut_type: activeCutType,
+                      product_type: productType,
+                      source_page: "result_page",
+                    })
+                  }
+                >
+                  Download SVG
+                </a>
+              )
             ) : previewAssetReady && paymentStatus !== "paid" ? (
               <div className="mt-5">
                 <div className="rounded-[8px] border border-[#d8c36b] bg-[#fff9dc] px-4 py-3">
@@ -613,11 +710,18 @@ export default function ResultClient({ jobId }: ResultClientProps) {
 
             {isSvgReady ? (
               <p className="mt-4 rounded-[8px] border border-[#c9dfcf] bg-[#f1f8f2] px-4 py-3 text-sm font-semibold text-[#315f46]">
-                Clean SVG ready. Download is enabled.
+                {isCompletePack
+                  ? "Complete SVG Pack ready. Both downloads are enabled."
+                  : "Clean SVG ready. Download is enabled."}
                 {creditsCalculated
                   ? ` Credits calculated: ${creditsCalculated}.`
                   : ""}
                 {creditsCharged ? ` Credits charged: ${creditsCharged}.` : ""}
+              </p>
+            ) : hasAnyCompleteOutput ? (
+              <p className="mt-4 rounded-[8px] border border-[#d8c36b] bg-[#fff9dc] px-4 py-3 text-sm font-semibold text-[#6a5414]">
+                One file is ready. The missing file can be retried safely
+                without another payment.
               </p>
             ) : finalGenerationFailed ? (
               <p className="mt-4 rounded-[8px] border border-[#e4b5a8] bg-[#fff4f0] px-4 py-3 text-sm font-medium text-[#8a3426]">

@@ -35,9 +35,53 @@ test("server prices remain five, nine, twelve, and nineteen dollars", async () =
   const pricing = await readFile(new URL("../lib/pricing.ts", import.meta.url), "utf8");
   assert.match(pricing, /single[\s\S]*amountCents:\s*500/);
   assert.match(pricing, /multi[\s\S]*amountCents:\s*900/);
-  assert.match(pricing, /complete[\s\S]*amountCents:\s*1200/);
+  assert.match(pricing, /complete_pack[\s\S]*amountCents:\s*1200/);
   assert.match(pricing, /LOGOCUT_UNLIMITED_PLAN[\s\S]*amountCents:\s*1900/);
   assert.match(pricing, /monthlyConversionLimit:\s*25/);
+});
+
+test("output types stay separate from product types", async () => {
+  const source = await readFile(new URL("../lib/job-types.ts", import.meta.url), "utf8");
+  const outputTypeLine = source.split("\n").find((line) => line.startsWith("export type OutputType"));
+  assert.match(source, /export type OutputType = "single" \| "multi"/);
+  assert.match(source, /export type ProductType =[\s\S]*"single_svg"[\s\S]*"layered_svg"[\s\S]*"complete_pack"[\s\S]*"unlimited_subscription"/);
+  assert.doesNotMatch(outputTypeLine ?? "", /complete_pack/);
+});
+
+test("PayPal order pricing is server-authoritative and rejects client price manipulation", async () => {
+  const source = await readFile(new URL("../app/api/paypal/orders/route.ts", import.meta.url), "utf8");
+  assert.match(source, /getOneTimeProductPrice\(productType\)/);
+  assert.match(source, /getExpectedPayPalAmount\(price\)/);
+  assert.doesNotMatch(source, /payload\.price/);
+  assert.doesNotMatch(source, /payload\.amount/);
+});
+
+test("Complete Pack capture generates both outputs and preserves partial success", async () => {
+  const source = await readFile(new URL("../app/api/paypal/orders/[orderId]/capture/route.ts", import.meta.url), "utf8");
+  assert.match(source, /getServerJobProductType\(latestPaidJob\) === "complete_pack"/);
+  assert.match(source, /for \(const outputType of outputTypes\)/);
+  assert.match(source, /hasServerJobFinalOutputSvg\(workingJob, outputType\)/);
+  assert.match(source, /saveServerJobFinalOutputSvg/);
+  assert.match(source, /failedOutputs\.push/);
+});
+
+test("duplicate PayPal capture returns success without rerunning final generation", async () => {
+  const source = await readFile(new URL("../app/api/paypal/orders/[orderId]/capture/route.ts", import.meta.url), "utf8");
+  assert.match(source, /hasServerJobFinalSvg\(job\) && job\.paymentStatus === "paid"/);
+  assert.match(source, /Final generation already completed/);
+});
+
+test("production generation is not available before payment", async () => {
+  const source = await readFile(new URL("../app/api/jobs/[jobId]/vectorize/route.ts", import.meta.url), "utf8");
+  assert.match(source, /const mode = job\.paymentStatus === "paid" \? "production" : "test"/);
+});
+
+test("Complete Pack exposes two labeled downloads", async () => {
+  const source = await readFile(new URL("../app/result/[jobId]/result-client.tsx", import.meta.url), "utf8");
+  assert.match(source, /Download Single-Color SVG/);
+  assert.match(source, /Download Layered SVG/);
+  assert.match(source, /output=single/);
+  assert.match(source, /output=multi/);
 });
 
 test("subscription statuses and usage ledger states are explicit", async () => {

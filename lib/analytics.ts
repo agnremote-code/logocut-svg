@@ -1,6 +1,6 @@
 "use client";
 
-import { CutType } from "@/lib/job-types";
+import { CutType, OneTimeProductType } from "@/lib/job-types";
 
 type AnalyticsEventName =
   | "homepage_view"
@@ -29,6 +29,7 @@ type AnalyticsEventName =
 
 type AnalyticsParams = {
   cut_type?: CutType;
+  product_type?: OneTimeProductType;
   source_page?: string;
   file_type?: string;
   currency?: "USD";

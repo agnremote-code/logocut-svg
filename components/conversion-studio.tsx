@@ -10,6 +10,9 @@ import {
   CutType,
   JobSummary,
   MAX_FILE_SIZE,
+  ONE_TIME_PRODUCT_OPTIONS,
+  OneTimeProductType,
+  getDefaultProductTypeForOutput,
 } from "@/lib/job-types";
 import { trackEvent } from "@/lib/analytics";
 import { resolvePreviewAsset } from "@/lib/preview-asset";
@@ -102,6 +105,7 @@ export function ConversionStudio() {
   const [previewReference, setPreviewReference] = useState<string | null>(null);
   const [previewAssetState, setPreviewAssetState] = useState<PreviewAssetState>(null);
   const [cut, setCut] = useState<CutType>("single");
+  const [productType, setProductType] = useState<OneTimeProductType>("single_svg");
   const [previewCut, setPreviewCut] = useState<CutType | null>(null);
   const [error, setError] = useState("");
   const [jobId, setJobId] = useState("");
@@ -201,6 +205,7 @@ export function ConversionStudio() {
   const changeCut = (nextCut: CutType) => {
     if (nextCut === cut) return;
     setCut(nextCut);
+    setProductType(getDefaultProductTypeForOutput(nextCut));
     trackEvent("conversion_setting_changed", { setting: "output_type", value: nextCut });
 
     if (state === "preview_ready" || state === "paid_result") {
@@ -281,6 +286,9 @@ export function ConversionStudio() {
     previewAssetState === "preview_asset_ready" &&
     Boolean(userOriginalUrl && userPreviewUrl && jobId) &&
     previewCut === cut;
+  const selectedProduct = ONE_TIME_PRODUCT_OPTIONS.find(
+    (option) => option.id === productType,
+  ) ?? ONE_TIME_PRODUCT_OPTIONS[0];
 
   const markPreviewLoaded = () => {
     setPreviewAssetState("preview_asset_ready");
@@ -385,16 +393,45 @@ export function ConversionStudio() {
           <div className="purchase-summary">
             <span className="success-pill">Free Watermarked Preview</span>
             <h2>Unlock Your Clean SVG</h2>
-            <h3>{cut === "single" ? "Single-Color SVG" : "Layered SVG"}</h3>
+            <div className="product-choice-list" role="radiogroup" aria-label="Choose product">
+              {ONE_TIME_PRODUCT_OPTIONS.map((option) => (
+                <button
+                  type="button"
+                  key={option.id}
+                  className={productType === option.id ? "active" : ""}
+                  onClick={() => {
+                    setProductType(option.id);
+                    trackEvent("conversion_setting_changed", {
+                      setting: "product_type",
+                      value: option.id,
+                    });
+                  }}
+                  role="radio"
+                  aria-checked={productType === option.id}
+                >
+                  <span>
+                    <strong>{option.name}</strong>
+                    {option.badge ? <em>{option.badge}</em> : null}
+                  </span>
+                  <small>{option.description}</small>
+                  <b>{option.price}</b>
+                </button>
+              ))}
+            </div>
+            <h3>{selectedProduct.name}</h3>
             <strong className="purchase-price">
-              {cut === "single" ? "$5" : "$9"} <small>one-time</small>
+              {selectedProduct.price} <small>one-time</small>
             </strong>
             <ul>
-              <li>Clean SVG without watermark</li>
+              <li>
+                {productType === "complete_pack"
+                  ? "Both clean single-color and layered SVG files"
+                  : "Clean SVG without watermark"}
+              </li>
               <li>Instant download after processing</li>
               <li>No subscription</li>
             </ul>
-            <PayPalCheckout jobId={jobId} cutType={cut} />
+            <PayPalCheckout jobId={jobId} cutType={cut} productType={productType} />
             <button className="text-button" onClick={() => setState("file_selected")}>
               Adjust Settings
             </button>

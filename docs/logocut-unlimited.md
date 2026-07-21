@@ -90,6 +90,15 @@ BLOB_READ_WRITE_TOKEN="..."
 
 ## Data Model
 
+Output types and products must stay separate:
+
+- output types: `single`, `multi`;
+- one-time products: `single_svg`, `layered_svg`, `complete_pack`;
+- recurring product: `unlimited_subscription`.
+
+Complete SVG Pack is not a third output type. It is one purchase that generates
+both output types from the same original image.
+
 ### User
 
 - `id`

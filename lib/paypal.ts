@@ -44,12 +44,50 @@ export class PayPalNotConfiguredError extends Error {
 
 export class PayPalApiError extends Error {
   status: number;
+  paypalName?: string;
+  paypalMessage?: string;
+  paypalDebugId?: string;
+  paypalDetailsIssue?: string;
 
-  constructor(message: string, status: number) {
+  constructor(
+    message: string,
+    status: number,
+    details: {
+      paypalName?: string;
+      paypalMessage?: string;
+      paypalDebugId?: string;
+      paypalDetailsIssue?: string;
+    } = {},
+  ) {
     super(message);
     this.name = "PayPalApiError";
     this.status = status;
+    this.paypalName = details.paypalName;
+    this.paypalMessage = details.paypalMessage;
+    this.paypalDebugId = details.paypalDebugId;
+    this.paypalDetailsIssue = details.paypalDetailsIssue;
   }
+}
+
+type PayPalErrorPayload = {
+  name?: string;
+  message?: string;
+  debug_id?: string;
+  error?: string;
+  error_description?: string;
+  details?: Array<{
+    issue?: string;
+    description?: string;
+  }>;
+};
+
+function getPayPalErrorDetails(payload: PayPalErrorPayload | null) {
+  return {
+    paypalName: payload?.name ?? payload?.error,
+    paypalMessage: payload?.message ?? payload?.error_description,
+    paypalDebugId: payload?.debug_id,
+    paypalDetailsIssue: payload?.details?.[0]?.issue,
+  };
 }
 
 function getPayPalEnvironment(): PayPalEnvironment {
@@ -97,12 +135,16 @@ async function getPayPalAccessToken() {
     body: "grant_type=client_credentials",
     cache: "no-store",
   });
-  const payload = (await response.json().catch(() => null)) as {
+  const payload = (await response.json().catch(() => null)) as ({
     access_token?: string;
-  } | null;
+  } & PayPalErrorPayload) | null;
 
   if (!response.ok || !payload?.access_token) {
-    throw new PayPalApiError("PayPal order creation failed", response.status);
+    throw new PayPalApiError(
+      "PayPal authentication failed",
+      response.status,
+      getPayPalErrorDetails(payload),
+    );
   }
 
   return payload.access_token;
@@ -132,26 +174,35 @@ async function paypalRequest<T>({
     body: body ? JSON.stringify(body) : undefined,
     cache: "no-store",
   });
-  const payload = (await response.json().catch(() => null)) as T | null;
+  const payload = (await response.json().catch(() => null)) as
+    | (T & PayPalErrorPayload)
+    | PayPalErrorPayload
+    | null;
 
   if (!response.ok || !payload) {
-    throw new PayPalApiError(errorMessage, response.status);
+    throw new PayPalApiError(
+      errorMessage,
+      response.status,
+      getPayPalErrorDetails(payload),
+    );
   }
 
-  return payload;
+  return payload as T;
 }
 
 export async function createPayPalOrder({
   jobId,
   price,
+  requestId,
 }: {
   jobId: string;
   price: CutPrice;
+  requestId?: string;
 }) {
   const order = await paypalRequest<PayPalOrderResponse>({
     path: "/v2/checkout/orders",
     method: "POST",
-    requestId: `logocut-create-${jobId}`,
+    requestId: requestId ?? `logocut-create-${jobId}`,
     errorMessage: "PayPal order creation failed",
     body: {
       intent: "CAPTURE",

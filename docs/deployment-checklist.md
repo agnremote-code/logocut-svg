@@ -32,6 +32,40 @@ For the current MVP:
 - Confirm the project has either `BLOB_STORE_ID` from Vercel system environment variables with OIDC enabled or `BLOB_READ_WRITE_TOKEN` configured.
 - Stripe code remains in the repo but is inactive in the public unlock UI.
 
+## LogoCut Unlimited Later
+
+Do not deploy the subscription publicly until subscriber auth, verified Stripe
+Billing webhooks, cancellation, billing management and monthly allowance
+enforcement are tested end-to-end.
+
+Planned subscription environment variables:
+
+```bash
+STRIPE_SECRET_KEY
+STRIPE_WEBHOOK_SECRET
+STRIPE_UNLIMITED_PRICE_ID
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+AUTH_SECRET
+EMAIL_FROM
+EMAIL_PROVIDER_API_KEY
+NEXT_PUBLIC_APP_URL
+```
+
+Stripe Billing is the selected subscription provider. PayPal remains the active
+one-time checkout provider.
+
+Before enabling LogoCut Unlimited:
+
+- Create a Stripe Product named `LogoCut Unlimited`.
+- Create a recurring monthly Price for USD 19.
+- Store the Price ID in `STRIPE_UNLIMITED_PRICE_ID`.
+- Configure the Stripe Customer Portal with cancellation enabled.
+- Create a Stripe webhook endpoint for subscription events.
+- Verify webhook signatures with `STRIPE_WEBHOOK_SECRET`.
+- Test successful activation, renewal, payment failure, cancellation and period
+  end expiration.
+- Add an atomic usage ledger before enforcing the 25-conversion monthly limit.
+
 ## PayPal Live Mode Later
 
 Before accepting real customer payments:

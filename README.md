@@ -21,7 +21,9 @@ The current product flow is:
 - Runs clean SVG generation only after payment is confirmed.
 - Shows a result page with SVG preview and download.
 
-The app does not include user accounts, subscriptions, or dashboards.
+The public app does not currently enable subscriber accounts, subscriptions, or
+dashboards. LogoCut Unlimited is documented as a planned recurring product in
+[docs/logocut-unlimited.md](docs/logocut-unlimited.md).
 
 ## Local Setup
 
@@ -50,9 +52,19 @@ PAYPAL_CLIENT_ID="your-paypal-sandbox-client-id"
 PAYPAL_CLIENT_SECRET="your-paypal-sandbox-client-secret"
 PAYPAL_ENVIRONMENT="sandbox"
 
-# Stripe remains in the repo but is inactive in the public unlock UI.
+# Stripe one-time checkout remains inactive in the public unlock UI.
+# Stripe Billing is the planned provider for LogoCut Unlimited subscriptions.
 STRIPE_SECRET_KEY="sk_test_your-stripe-secret-key"
 STRIPE_WEBHOOK_SECRET="whsec_your-stripe-webhook-secret"
+STRIPE_UNLIMITED_PRICE_ID="price_your-logocut-unlimited-monthly-price"
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="pk_test_your-stripe-publishable-key"
+
+# Required before enabling passwordless subscriber accounts.
+AUTH_SECRET="replace-with-a-random-32-byte-secret"
+EMAIL_FROM="LogoCut SVG <support@logocutsvg.com>"
+EMAIL_PROVIDER_API_KEY="your-transactional-email-api-key"
+
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
 
 # Optional for local durable Blob testing.
 BLOB_READ_WRITE_TOKEN="vercel-blob-read-write-token"
@@ -64,7 +76,9 @@ Notes:
 - `NEXT_PUBLIC_PAYPAL_CLIENT_ID` is the public PayPal JavaScript SDK client ID.
 - `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` are used server-side for the PayPal Orders API.
 - `PAYPAL_ENVIRONMENT` must be `sandbox` or `live`; use `sandbox` until launch.
-- Stripe code remains available in the repo, but PayPal is the active checkout path.
+- Stripe code remains available in the repo, but PayPal is the active one-time checkout path.
+- Stripe Billing is selected for the planned `LogoCut Unlimited` subscription because it provides hosted subscription Checkout, verified subscription webhooks, failed-payment lifecycle events and Customer Portal subscription management.
+- Do not enable `LogoCut Unlimited` publicly until subscriber auth, verified webhooks, cancellation, billing management and monthly usage enforcement have passed end-to-end tests.
 - Vercel Blob stores uploaded images, generated SVG files, and job metadata JSON.
 - For local durable Blob testing, use `BLOB_READ_WRITE_TOKEN`.
 - In Vercel, a connected Blob store can provide `BLOB_STORE_ID` through system environment variables and the Blob SDK uses Vercel OIDC automatically; `BLOB_READ_WRITE_TOKEN` is optional in that setup.

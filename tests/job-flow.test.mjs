@@ -31,8 +31,29 @@ test("PayPal checkout uses one SDK loader and distinct operation errors", async 
   assert.doesNotMatch(source, /PayPal could not be loaded\. Please try again\./);
 });
 
-test("server prices remain five and nine dollars", async () => {
+test("server prices remain five, nine, twelve, and nineteen dollars", async () => {
   const pricing = await readFile(new URL("../lib/pricing.ts", import.meta.url), "utf8");
   assert.match(pricing, /single[\s\S]*amountCents:\s*500/);
   assert.match(pricing, /multi[\s\S]*amountCents:\s*900/);
+  assert.match(pricing, /complete[\s\S]*amountCents:\s*1200/);
+  assert.match(pricing, /LOGOCUT_UNLIMITED_PLAN[\s\S]*amountCents:\s*1900/);
+  assert.match(pricing, /monthlyConversionLimit:\s*25/);
+});
+
+test("subscription statuses and usage ledger states are explicit", async () => {
+  const source = await readFile(new URL("../lib/subscription-types.ts", import.meta.url), "utf8");
+  for (const status of [
+    "inactive",
+    "checkout_pending",
+    "active",
+    "past_due",
+    "cancelled_until_period_end",
+    "expired",
+  ]) {
+    assert.match(source, new RegExp(`"${status}"`));
+  }
+
+  for (const status of ["reserved", "processing", "completed", "failed", "reversed"]) {
+    assert.match(source, new RegExp(`"${status}"`));
+  }
 });

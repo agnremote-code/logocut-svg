@@ -78,7 +78,8 @@ Before accepting real customer payments:
 
 ## Stripe Legacy Code
 
-Stripe routes and webhook handling remain in the codebase for now, but they are not called by the active public result-page unlock flow.
+Stripe library code remains in the codebase for now, but no public Stripe route
+or recurring checkout is exposed by the active application.
 
 ## Vectorizer Production Mode Later
 
@@ -98,13 +99,8 @@ Before charging for production SVG output:
 
 - PayPal Checkout capture is verified server-side during the buyer approval flow.
 - Before launch, add a PayPal live webhook if you want a backup reconciliation path for completed captures.
-- If Stripe is reactivated later, create a Stripe webhook endpoint for:
-
-```text
-https://your-domain.com/api/stripe/webhook
-```
-
-- Subscribe to `checkout.session.completed`.
+- If Stripe Billing is activated later, add a verified Stripe webhook endpoint.
+- Subscribe to the required subscription and invoice events.
 - Copy the webhook signing secret into `STRIPE_WEBHOOK_SECRET` in Vercel.
 - Send a test webhook from Stripe and confirm a `200` response.
 

@@ -768,7 +768,7 @@ summary:focus-visible,
 
 .studio-sidebar {
   padding: 22px;
-  gap: 12px;
+  gap: 11px;
 }
 
 .studio-dropzone {
@@ -832,19 +832,24 @@ summary:focus-visible,
   font-size: 12px;
 }
 
+.studio-primary {
+  min-height: 48px;
+  margin-top: 0;
+}
+
 .complete-pack-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 9px 14px;
+  gap: 14px;
   align-items: center;
   width: 100%;
-  border: 1px solid #d8ded9;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #ffffff 0%, #fbfdf9 100%);
-  padding: 11px;
+  border: 1px solid #d9dfda;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 12px;
   color: #111815;
   text-align: left;
-  box-shadow: 0 10px 28px rgba(17, 24, 21, 0.06);
+  box-shadow: 0 1px 2px rgba(17, 24, 21, 0.04);
   cursor: pointer;
   transition:
     border-color 0.18s ease,
@@ -854,27 +859,35 @@ summary:focus-visible,
 }
 
 .complete-pack-card:hover {
-  border-color: #9fceb0;
+  border-color: #8fcaa4;
+  box-shadow: 0 8px 22px rgba(17, 24, 21, 0.08);
   transform: translateY(-1px);
 }
 
 .complete-pack-card.active {
   border-color: #16834b;
-  background: #eef8f1;
+  background: linear-gradient(180deg, #f5fbf6 0%, #eef8f1 100%);
   box-shadow:
-    inset 0 0 0 1px #b9dcc6,
-    0 14px 30px rgba(22, 131, 75, 0.14);
+    inset 0 0 0 1px rgba(22, 131, 75, 0.24),
+    0 10px 24px rgba(22, 131, 75, 0.12);
+}
+
+.complete-pack-main {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 11px;
 }
 
 .complete-pack-badge {
-  width: fit-content;
+  flex: 0 0 auto;
   border-radius: 999px;
-  background: #111815;
-  padding: 5px 8px;
-  color: #ffffff;
+  background: #eef8f1;
+  padding: 5px 7px;
+  color: #11683c;
   font-size: 10px;
-  font-weight: 850;
-  letter-spacing: 0.08em;
+  font-weight: 800;
+  letter-spacing: 0.02em;
 }
 
 .complete-pack-copy {
@@ -885,41 +898,41 @@ summary:focus-visible,
 }
 
 .complete-pack-copy strong {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 800;
   line-height: 1.2;
 }
 
 .complete-pack-copy small {
   color: #667069;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.35;
 }
 
-.complete-pack-copy em {
-  color: #11683c;
-  font-size: 12px;
-  font-style: normal;
-  font-weight: 800;
-  line-height: 1.3;
+.complete-pack-price {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
 }
 
-.complete-pack-card b {
-  align-self: end;
+.complete-pack-price b {
   color: #111815;
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 850;
   line-height: 1;
-  text-align: right;
   white-space: nowrap;
 }
 
-.complete-pack-card b small {
-  display: block;
-  margin-top: 4px;
-  color: #667069;
+.complete-pack-price small {
+  border-radius: 999px;
+  background: #ffffff;
+  color: #11683c;
+  padding: 3px 6px;
   font-size: 11px;
-  font-weight: 750;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .complete-preview-switch {
@@ -954,8 +967,34 @@ summary:focus-visible,
 }
 
 @media (max-width: 900px) {
+  .premium-hero {
+    padding: 14px 16px 12px;
+  }
+
+  .premium-hero h1 {
+    font-size: 36px;
+  }
+
+  .premium-hero > p:not(.hero-pill) {
+    margin-top: 10px;
+    font-size: 15px;
+    line-height: 1.45;
+  }
+
+  .premium-hero > span {
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .studio-wrap {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
   .studio-sidebar {
     order: -1;
+    padding: 16px;
+    gap: 10px;
   }
 
   .studio-result {
@@ -964,11 +1003,17 @@ summary:focus-visible,
 
   .complete-pack-card {
     grid-template-columns: 1fr;
+    gap: 10px;
   }
 
-  .complete-pack-card b {
-    align-self: start;
-    text-align: left;
+  .complete-pack-main {
+    align-items: flex-start;
+  }
+
+  .complete-pack-price {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
   }
 
   .complete-preview-switch {

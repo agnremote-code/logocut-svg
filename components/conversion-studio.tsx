@@ -416,19 +416,17 @@ export function ConversionStudio() {
           onClick={toggleCompletePack}
           aria-pressed={isCompletePackSelected}
         >
-          <span className="complete-pack-badge">BEST VALUE</span>
-          <span className="complete-pack-copy">
-            <strong>Get Both SVG Versions</strong>
-            <small>Single-color + layered SVG from one upload.</small>
-            <em>
-              {isCompletePackSelected
-                ? "Complete SVG Pack — $12 selected"
-                : "Save $2 compared with buying both separately."}
-            </em>
+          <span className="complete-pack-main">
+            <span className="complete-pack-badge">Best value</span>
+            <span className="complete-pack-copy">
+              <strong>Complete SVG Pack</strong>
+              <small>Both SVG versions from one upload</small>
+            </span>
           </span>
-          <b>
-            $12 <small>one-time</small>
-          </b>
+          <span className="complete-pack-price">
+            <b>$12</b>
+            <small>Save $2</small>
+          </span>
         </button>
         {isCompletePackSelected ? (
           <div className="complete-preview-switch" role="group" aria-label="Choose preview type">

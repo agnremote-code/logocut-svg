@@ -86,8 +86,10 @@ test("Complete Pack exposes two labeled downloads", async () => {
 
 test("Complete Pack studio card is a product selection above preview generation", async () => {
   const source = await readFile(new URL("../components/conversion-studio.tsx", import.meta.url), "utf8");
-  assert.match(source, /Get Both SVG Versions/);
-  assert.match(source, /Complete SVG Pack — \$12 selected/);
+  assert.match(source, /Best value/);
+  assert.match(source, /Complete SVG Pack/);
+  assert.match(source, /Both SVG versions from one upload/);
+  assert.match(source, /Save \$2/);
   assert.match(source, /Single-Color Preview/);
   assert.match(source, /Layered Preview/);
   assert.match(source, /setProductType\(nextProductType\)/);

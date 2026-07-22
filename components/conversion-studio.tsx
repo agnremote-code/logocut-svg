@@ -205,7 +205,11 @@ export function ConversionStudio() {
   const changeCut = (nextCut: CutType) => {
     if (nextCut === cut) return;
     setCut(nextCut);
-    setProductType(getDefaultProductTypeForOutput(nextCut));
+    setProductType((currentProductType) =>
+      currentProductType === "complete_pack"
+        ? "complete_pack"
+        : getDefaultProductTypeForOutput(nextCut),
+    );
     trackEvent("conversion_setting_changed", { setting: "output_type", value: nextCut });
 
     if (state === "preview_ready" || state === "paid_result") {
@@ -213,6 +217,22 @@ export function ConversionStudio() {
       setError("Settings changed. Generate a new preview to update the SVG.");
       setState("file_selected");
     }
+  };
+
+  const toggleCompletePack = () => {
+    const selectingCompletePack = productType !== "complete_pack";
+    const nextProductType = selectingCompletePack
+      ? "complete_pack"
+      : getDefaultProductTypeForOutput(cut);
+
+    setProductType(nextProductType);
+    trackEvent("conversion_setting_changed", {
+      setting: "product_type",
+      value: nextProductType,
+      product_type: nextProductType,
+      price: selectingCompletePack ? 12 : undefined,
+      source: "studio_above_fold",
+    });
   };
 
   const generatePreview = async () => {
@@ -289,6 +309,7 @@ export function ConversionStudio() {
   const selectedProduct = ONE_TIME_PRODUCT_OPTIONS.find(
     (option) => option.id === productType,
   ) ?? ONE_TIME_PRODUCT_OPTIONS[0];
+  const isCompletePackSelected = productType === "complete_pack";
 
   const markPreviewLoaded = () => {
     setPreviewAssetState("preview_asset_ready");
@@ -389,10 +410,53 @@ export function ConversionStudio() {
           </div>
           <p>Choose the format that matches your cutting project.</p>
         </fieldset>
+        <button
+          type="button"
+          className={`complete-pack-card ${isCompletePackSelected ? "active" : ""}`}
+          onClick={toggleCompletePack}
+          aria-pressed={isCompletePackSelected}
+        >
+          <span className="complete-pack-badge">BEST VALUE</span>
+          <span className="complete-pack-copy">
+            <strong>Get Both SVG Versions</strong>
+            <small>Single-color + layered SVG from one upload.</small>
+            <em>
+              {isCompletePackSelected
+                ? "Complete SVG Pack — $12 selected"
+                : "Save $2 compared with buying both separately."}
+            </em>
+          </span>
+          <b>
+            $12 <small>one-time</small>
+          </b>
+        </button>
+        {isCompletePackSelected ? (
+          <div className="complete-preview-switch" role="group" aria-label="Choose preview type">
+            <span>View preview as</span>
+            <button
+              type="button"
+              className={cut === "single" ? "active" : ""}
+              onClick={() => changeCut("single")}
+            >
+              Single-Color Preview
+            </button>
+            <button
+              type="button"
+              className={cut === "multi" ? "active" : ""}
+              onClick={() => changeCut("multi")}
+            >
+              Layered Preview
+            </button>
+          </div>
+        ) : null}
         {hasMatchingPreview ? (
           <div className="purchase-summary">
             <span className="success-pill">Free Watermarked Preview</span>
-            <h2>Unlock Your Clean SVG</h2>
+            <h2>
+              {isCompletePackSelected
+                ? "Unlock both clean SVG files for $12"
+                : "Unlock Your Clean SVG"}
+            </h2>
             <div className="product-choice-list" role="radiogroup" aria-label="Choose product">
               {ONE_TIME_PRODUCT_OPTIONS.map((option) => (
                 <button
@@ -444,9 +508,7 @@ export function ConversionStudio() {
           >
             {state === "preview_generating"
               ? "Creating your preview…"
-              : file
-                ? "Generate Free Preview"
-                : "Try Your Own Image"}
+              : "Generate Free Preview"}
           </button>
         )}
       </div>

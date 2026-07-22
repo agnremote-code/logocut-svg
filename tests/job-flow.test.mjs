@@ -84,6 +84,18 @@ test("Complete Pack exposes two labeled downloads", async () => {
   assert.match(source, /output=multi/);
 });
 
+test("Vectorizer receives distinct single-color and layered output options", async () => {
+  const source = await readFile(new URL("../lib/vectorizer.ts", import.meta.url), "utf8");
+  assert.match(source, /function appendOutputOptions/);
+  assert.match(source, /processing\.max_colors", "2"/);
+  assert.match(source, /output\.shape_stacking", "cutouts"/);
+  assert.match(source, /output\.group_by", "none"/);
+  assert.match(source, /processing\.max_colors", "0"/);
+  assert.match(source, /output\.shape_stacking", "stacked"/);
+  assert.match(source, /output\.group_by", "color"/);
+  assert.match(source, /appendOutputOptions\(formData, cutType\)/);
+});
+
 test("subscription statuses and usage ledger states are explicit", async () => {
   const source = await readFile(new URL("../lib/subscription-types.ts", import.meta.url), "utf8");
   for (const status of [

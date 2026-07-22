@@ -14,7 +14,6 @@ import {
   saveServerJobError,
   saveServerJobPreviewSvg,
   toJobSummary,
-  updateServerJobStatus,
 } from "@/lib/server-job-store";
 import { vectorizeImage } from "@/lib/vectorizer";
 
@@ -62,18 +61,6 @@ export async function POST(_request: Request, context: RouteContext) {
       creditsCalculated: job.creditsCalculated ?? null,
       creditsCharged: job.creditsCharged ?? null,
     });
-  }
-
-  try {
-    await updateServerJobStatus(jobId, mode === "test" ? "previewing" : "processing");
-  } catch (error) {
-    if (isStorageNotConfiguredError(error)) {
-      return NextResponse.json(getStorageNotConfiguredResponseBody(), {
-        status: 503,
-      });
-    }
-
-    throw error;
   }
 
   const imageBuffer = await getServerJobOriginalImage(job);

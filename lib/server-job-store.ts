@@ -2,6 +2,7 @@ import {
   BlobNotFoundError,
   get,
   head,
+  list,
   put,
 } from "@vercel/blob";
 import {
@@ -380,6 +381,14 @@ function getMetadataPath(jobId: string) {
   return `${getJobFolder(jobId)}/metadata.json`;
 }
 
+function getMetadataVersionsPrefix(jobId: string) {
+  return `${getJobFolder(jobId)}/metadata-versions/`;
+}
+
+function getMetadataVersionPath(jobId: string) {
+  return `${getMetadataVersionsPrefix(jobId)}${Date.now()}-${crypto.randomUUID()}.json`;
+}
+
 function getOriginalFileName(input: Pick<CreateServerJobInput, "fileName" | "fileType">) {
   if (input.fileType === "image/png") {
     return "original.png";
@@ -507,11 +516,20 @@ function applyPayPalPaymentMetadata(
 
 async function saveDurableJob(job: ServerJobRecord) {
   try {
+    await put(getMetadataVersionPath(job.id), JSON.stringify(job, null, 2), {
+      ...getBlobSdkOptions(),
+      contentType: "application/json",
+      addRandomSuffix: false,
+      allowOverwrite: false,
+      cacheControlMaxAge: 60,
+    });
+
     await put(getMetadataPath(job.id), JSON.stringify(job, null, 2), {
       ...getBlobSdkOptions(),
       contentType: "application/json",
       addRandomSuffix: false,
       allowOverwrite: true,
+      cacheControlMaxAge: 60,
     });
   } catch (error) {
     handleBlobSdkError("put-metadata", error);
@@ -652,8 +670,30 @@ export async function getServerJob(jobId: string) {
   }
 
   try {
-    await head(getMetadataPath(jobId), getBlobSdkOptions());
-    const metadata = await get(getMetadataPath(jobId), getBlobSdkOptions());
+    const versions = await list({
+      ...getBlobCredentialsOrThrow().options,
+      prefix: getMetadataVersionsPrefix(jobId),
+      limit: 100,
+    });
+    const latestVersion = versions.blobs
+      .filter((blob) => blob.pathname.endsWith(".json"))
+      .sort((a, b) => {
+        const uploadedAtDifference =
+          b.uploadedAt.getTime() - a.uploadedAt.getTime();
+
+        if (uploadedAtDifference !== 0) {
+          return uploadedAtDifference;
+        }
+
+        return b.pathname.localeCompare(a.pathname);
+      })[0];
+    const metadataPath = latestVersion?.pathname ?? getMetadataPath(jobId);
+
+    if (!latestVersion) {
+      await head(metadataPath, getBlobSdkOptions());
+    }
+
+    const metadata = await get(metadataPath, getBlobSdkOptions());
 
     if (!metadata || metadata.statusCode !== 200 || !metadata.stream) {
       return null;

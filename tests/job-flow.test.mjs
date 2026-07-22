@@ -99,6 +99,34 @@ test("Complete Pack studio card is a product selection above preview generation"
   assert.match(source, /Generate Free Preview/);
 });
 
+test("Complete Pack defaults to layered preview while preserving single preview switching", async () => {
+  const source = await readFile(new URL("../components/conversion-studio.tsx", import.meta.url), "utf8");
+  assert.match(source, /nextProductType === "complete_pack" && cut !== "multi"/);
+  assert.match(source, /setCut\("multi"\)/);
+  assert.match(source, /Colors are intentionally simplified for vinyl, decals and silhouette cuts\./);
+  assert.match(source, /Colors are separated into layered shapes for multi-color projects\./);
+  assert.match(source, /Single-Color Preview/);
+  assert.match(source, /Layered Preview/);
+  assert.match(source, /resultLabel=\{cut === "single" \? "Single-Color Preview" : "Layered Preview"\}/);
+});
+
+test("preview failures use safe code-based messages and support retry without reupload", async () => {
+  const source = await readFile(new URL("../components/conversion-studio.tsx", import.meta.url), "utf8");
+  assert.match(source, /network_error:\s*"The preview service could not be reached\. Please retry\."/);
+  assert.match(source, /missing_credentials:\s*"Preview service is temporarily unavailable\."/);
+  assert.match(source, /vectorizer_error:\s*"We couldn’t generate this preview right now\. Please retry\."/);
+  assert.match(source, /invalid_input:\s*"This image could not be processed\. Try another PNG or JPG\."/);
+  assert.match(source, /preview_failed/);
+  assert.match(source, /preview_retry_clicked/);
+  assert.match(source, /preview_failure_code/);
+  assert.match(source, /preview_mode/);
+  assert.match(source, /PreviewGenerationError/);
+  assert.match(source, /Retry Preview/);
+  assert.match(source, /Choose Another Image/);
+  assert.doesNotMatch(source, /previewPayload\.detail/);
+  assert.doesNotMatch(source, /Try a clearer logo/);
+});
+
 test("Vectorizer receives distinct single-color and layered output options", async () => {
   const source = await readFile(new URL("../lib/vectorizer.ts", import.meta.url), "utf8");
   assert.match(source, /function appendOutputOptions/);

@@ -9,6 +9,8 @@ type AnalyticsEventName =
   | "upload_completed"
   | "preview_requested"
   | "preview_generated"
+  | "preview_failed"
+  | "preview_retry_clicked"
   | "result_page_view"
   | "paypal_order_created"
   | "purchase_completed"
@@ -41,6 +43,8 @@ type AnalyticsParams = {
   setting?: string;
   value?: number | string;
   view_mode?: string;
+  preview_mode?: CutType;
+  preview_failure_code?: string;
   background?: string;
   direction?: string;
 };

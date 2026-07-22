@@ -949,6 +949,14 @@ summary:focus-visible,
   font-weight: 750;
 }
 
+.complete-preview-switch p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #667069;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .complete-preview-switch button {
   min-height: 34px;
   border: 1px solid #d9dfda;
@@ -964,6 +972,85 @@ summary:focus-visible,
   border-color: #16834b;
   background: #eef8f1;
   color: #11683c;
+}
+
+.preview-generation-error {
+  flex: 1;
+  min-height: 490px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border: 1px solid #efc5c0;
+  border-radius: 19px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.preview-generation-error figure {
+  position: relative;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  border-right: 1px solid #dde3de;
+  background: #f1f1eb;
+}
+
+.preview-generation-error figure > span {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  border-radius: 7px;
+  background: #111815;
+  color: #fff;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.preview-generation-error img {
+  width: 100%;
+  height: 100%;
+  max-height: 350px;
+  object-fit: contain;
+  padding: 34px;
+}
+
+.preview-generation-error > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  text-align: center;
+}
+
+.preview-generation-error > div > span {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: #fff0ee;
+  color: #b42318;
+  font-size: 25px;
+  font-weight: 800;
+}
+
+.preview-generation-error h3 {
+  margin: 18px 0 7px;
+  font-size: 24px;
+}
+
+.preview-generation-error p {
+  max-width: 420px;
+  margin: 0;
+  color: #667069;
+  line-height: 1.6;
+}
+
+.preview-generation-error > div > div {
+  display: flex;
+  gap: 10px;
+  margin-top: 22px;
 }
 
 @media (max-width: 900px) {
@@ -1022,5 +1109,30 @@ summary:focus-visible,
 
   .complete-preview-switch button {
     min-height: 40px;
+  }
+
+  .preview-generation-error {
+    grid-template-columns: 1fr;
+    min-height: 460px;
+  }
+
+  .preview-generation-error figure {
+    min-height: 230px;
+    border-right: 0;
+    border-bottom: 1px solid #dde3de;
+  }
+
+  .preview-generation-error img {
+    max-height: 230px;
+    padding: 38px;
+  }
+
+  .preview-generation-error > div {
+    padding: 26px 18px;
+  }
+
+  .preview-generation-error > div > div {
+    flex-direction: column;
+    width: 100%;
   }
 }

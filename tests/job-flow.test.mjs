@@ -84,6 +84,21 @@ test("Complete Pack exposes two labeled downloads", async () => {
   assert.match(source, /output=multi/);
 });
 
+test("Complete Pack studio card is a product selection above preview generation", async () => {
+  const source = await readFile(new URL("../components/conversion-studio.tsx", import.meta.url), "utf8");
+  assert.match(source, /Best value/);
+  assert.match(source, /Complete SVG Pack/);
+  assert.match(source, /Both SVG versions from one upload/);
+  assert.match(source, /Save \$2/);
+  assert.match(source, /Single-Color Preview/);
+  assert.match(source, /Layered Preview/);
+  assert.match(source, /setProductType\(nextProductType\)/);
+  assert.match(source, /product_type:\s*nextProductType/);
+  assert.match(source, /price:\s*selectingCompletePack \? 12 : undefined/);
+  assert.match(source, /source:\s*"studio_above_fold"/);
+  assert.match(source, /Generate Free Preview/);
+});
+
 test("Vectorizer receives distinct single-color and layered output options", async () => {
   const source = await readFile(new URL("../lib/vectorizer.ts", import.meta.url), "utf8");
   assert.match(source, /function appendOutputOptions/);

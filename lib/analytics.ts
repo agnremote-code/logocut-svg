@@ -31,6 +31,8 @@ type AnalyticsParams = {
   cut_type?: CutType;
   product_type?: OneTimeProductType;
   source_page?: string;
+  source?: string;
+  price?: number;
   file_type?: string;
   currency?: "USD";
   transaction_id?: string;

@@ -2,7 +2,7 @@
 
 import Script from "next/script";
 import { useEffect, useRef, useState } from "react";
-import { CutType } from "@/lib/job-types";
+import { CutType, OneTimeProductType } from "@/lib/job-types";
 import { trackEvent } from "@/lib/analytics";
 
 type PayPalButtons = { render: (container: HTMLElement) => Promise<void> };
@@ -20,7 +20,15 @@ declare global {
   }
 }
 
-export function PayPalCheckout({ jobId, cutType }: { jobId: string; cutType: CutType }) {
+export function PayPalCheckout({
+  jobId,
+  cutType,
+  productType,
+}: {
+  jobId: string;
+  cutType: CutType;
+  productType: OneTimeProductType;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewedRef = useRef(false);
   const buttonsRenderedRef = useRef(false);
@@ -57,14 +65,20 @@ export function PayPalCheckout({ jobId, cutType }: { jobId: string; cutType: Cut
           const response = await fetch("/api/paypal/orders", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ jobId, cutType }),
+            body: JSON.stringify({ jobId, cutType, productType }),
           });
           const payload = (await response.json()) as { orderId?: string; error?: string };
           if (!response.ok || !payload.orderId) throw new Error("order failed");
           trackEvent("paypal_order_created", {
             cut_type: cutType,
+            product_type: productType,
             source_page: "conversion_studio",
-            value: cutType === "multi" ? 9 : 5,
+            value:
+              productType === "complete_pack"
+                ? 12
+                : productType === "layered_svg"
+                  ? 9
+                  : 5,
             currency: "USD",
           });
           operationRef.current = "idle";
@@ -130,7 +144,7 @@ export function PayPalCheckout({ jobId, cutType }: { jobId: string; cutType: Cut
       active = false;
       container.innerHTML = "";
     };
-  }, [cutType, jobId, sdkReady]);
+  }, [cutType, jobId, productType, sdkReady]);
 
   if (!clientId) {
     return <p className="checkout-error">PayPal is temporarily unavailable.</p>;

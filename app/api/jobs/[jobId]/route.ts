@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import {
   getServerJob,
+  getServerJobFinalOutputStatuses,
+  getServerJobProductType,
   getStorageNotConfiguredResponseBody,
   hasServerJobFinalSvg,
   hasServerJobPreviewSvg,
@@ -36,8 +38,10 @@ export async function GET(_request: Request, context: RouteContext) {
 
   return NextResponse.json({
     job: toJobSummary(job),
+    productType: getServerJobProductType(job),
     previewReady: hasServerJobPreviewSvg(job),
     svgReady: hasServerJobFinalSvg(job),
+    finalOutputs: getServerJobFinalOutputStatuses(job),
     paymentStatus: job.paymentStatus,
     purchase:
       job.paymentStatus === "paid" && job.paypalOrderId && job.amountPaid

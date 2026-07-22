@@ -50,6 +50,21 @@ function toBuffer(imageBuffer: VectorizeImageInput["imageBuffer"]) {
   return Buffer.from(imageBuffer);
 }
 
+function appendOutputOptions(formData: FormData, cutType: CutType) {
+  if (cutType === "single") {
+    formData.append("processing.max_colors", "2");
+    formData.append("output.shape_stacking", "cutouts");
+    formData.append("output.group_by", "none");
+    formData.append("output.gap_filler.enabled", "false");
+    return;
+  }
+
+  formData.append("processing.max_colors", "0");
+  formData.append("output.shape_stacking", "stacked");
+  formData.append("output.group_by", "color");
+  formData.append("output.gap_filler.enabled", "true");
+}
+
 function getCredentials() {
   const apiId = process.env.VECTORIZER_API_ID?.trim();
   const apiSecret = process.env.VECTORIZER_API_SECRET?.trim();
@@ -141,6 +156,7 @@ export async function vectorizeImage({
   formData.append("image", imageBlob, filename);
   formData.append("mode", mode);
   formData.append("output.file_format", "svg");
+  appendOutputOptions(formData, cutType);
 
   const authorization = Buffer.from(
     `${credentials.apiId}:${credentials.apiSecret}`,

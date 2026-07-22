@@ -32,6 +32,40 @@ For the current MVP:
 - Confirm the project has either `BLOB_STORE_ID` from Vercel system environment variables with OIDC enabled or `BLOB_READ_WRITE_TOKEN` configured.
 - Stripe code remains in the repo but is inactive in the public unlock UI.
 
+## LogoCut Unlimited Later
+
+Do not deploy the subscription publicly until subscriber auth, verified Stripe
+Billing webhooks, cancellation, billing management and monthly allowance
+enforcement are tested end-to-end.
+
+Planned subscription environment variables:
+
+```bash
+STRIPE_SECRET_KEY
+STRIPE_WEBHOOK_SECRET
+STRIPE_UNLIMITED_PRICE_ID
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+AUTH_SECRET
+EMAIL_FROM
+EMAIL_PROVIDER_API_KEY
+NEXT_PUBLIC_APP_URL
+```
+
+Stripe Billing is the selected subscription provider. PayPal remains the active
+one-time checkout provider.
+
+Before enabling LogoCut Unlimited:
+
+- Create a Stripe Product named `LogoCut Unlimited`.
+- Create a recurring monthly Price for USD 19.
+- Store the Price ID in `STRIPE_UNLIMITED_PRICE_ID`.
+- Configure the Stripe Customer Portal with cancellation enabled.
+- Create a Stripe webhook endpoint for subscription events.
+- Verify webhook signatures with `STRIPE_WEBHOOK_SECRET`.
+- Test successful activation, renewal, payment failure, cancellation and period
+  end expiration.
+- Add an atomic usage ledger before enforcing the 25-conversion monthly limit.
+
 ## PayPal Live Mode Later
 
 Before accepting real customer payments:
@@ -44,7 +78,8 @@ Before accepting real customer payments:
 
 ## Stripe Legacy Code
 
-Stripe routes and webhook handling remain in the codebase for now, but they are not called by the active public result-page unlock flow.
+Stripe library code remains in the codebase for now, but no public Stripe route
+or recurring checkout is exposed by the active application.
 
 ## Vectorizer Production Mode Later
 
@@ -64,13 +99,8 @@ Before charging for production SVG output:
 
 - PayPal Checkout capture is verified server-side during the buyer approval flow.
 - Before launch, add a PayPal live webhook if you want a backup reconciliation path for completed captures.
-- If Stripe is reactivated later, create a Stripe webhook endpoint for:
-
-```text
-https://your-domain.com/api/stripe/webhook
-```
-
-- Subscribe to `checkout.session.completed`.
+- If Stripe Billing is activated later, add a verified Stripe webhook endpoint.
+- Subscribe to the required subscription and invoice events.
 - Copy the webhook signing secret into `STRIPE_WEBHOOK_SECRET` in Vercel.
 - Send a test webhook from Stripe and confirm a `200` response.
 

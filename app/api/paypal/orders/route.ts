@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { isCutType } from "@/lib/job-types";
+import {
+  getDefaultProductTypeForOutput,
+  isCutType,
+  isOneTimeProductType,
+} from "@/lib/job-types";
 import {
   createPayPalOrder,
   getExpectedPayPalAmount,
@@ -8,12 +12,13 @@ import {
   isPayPalApiError,
   isPayPalNotConfiguredError,
 } from "@/lib/paypal";
-import { getCutPrice } from "@/lib/pricing";
+import { getOneTimeProductPrice } from "@/lib/pricing";
 import {
   getServerJob,
   getServerJobOriginalImage,
   getStorageNotConfiguredResponseBody,
   getStorageWriteFailedResponseBody,
+  getServerJobProductType,
   hasServerJobFinalSvg,
   hasServerJobPreviewSvg,
   isStorageNotConfiguredError,
@@ -140,10 +145,14 @@ function logPayPalOrderError(
 }
 
 export async function POST(request: Request) {
-  let payload: { jobId?: string; cutType?: unknown };
+  let payload: { jobId?: string; cutType?: unknown; productType?: unknown };
 
   try {
-    payload = (await request.json()) as { jobId?: string; cutType?: unknown };
+    payload = (await request.json()) as {
+      jobId?: string;
+      cutType?: unknown;
+      productType?: unknown;
+    };
   } catch {
     return NextResponse.json(
       { error: "Invalid PayPal order request." },
@@ -185,6 +194,10 @@ export async function POST(request: Request) {
     );
   }
 
+  const requestedProductType = isOneTimeProductType(payload.productType)
+    ? payload.productType
+    : getDefaultProductTypeForOutput(payload.cutType);
+
   if (hasServerJobFinalSvg(job)) {
     return NextResponse.json(
       { error: "Final generation already completed" },
@@ -215,12 +228,14 @@ export async function POST(request: Request) {
   }
 
   try {
-    const price = getCutPrice(job.cutType);
+    const currentProductType = getServerJobProductType(job);
+    const productType = requestedProductType;
+    const price = getOneTimeProductPrice(productType);
     const expectedAmount = getExpectedPayPalAmount(price);
     const expectedAmountCents = price.amountCents;
-    let needsFreshOrderRequestId = false;
+    let needsFreshOrderRequestId = currentProductType !== productType;
 
-    if (job.paypalOrderId) {
+    if (job.paypalOrderId && currentProductType === productType) {
       try {
         const existingOrder = await getPayPalOrderDetails({
           orderId: job.paypalOrderId,
@@ -263,7 +278,11 @@ export async function POST(request: Request) {
         : undefined,
     });
 
-    await savePayPalOrder({ jobId: job.id, paypalOrderId: orderId });
+    await savePayPalOrder({
+      jobId: job.id,
+      paypalOrderId: orderId,
+      productType,
+    });
 
     logPayPalOrderEvent("created", {
       jobId: job.id,

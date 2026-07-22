@@ -5,20 +5,26 @@ import {
   getPayPalOrderDetails,
   isPayPalNotConfiguredError,
 } from "@/lib/paypal";
-import { getCutPrice } from "@/lib/pricing";
 import {
   getServerJob,
+  getServerJobFinalOutputStatuses,
   getServerJobOriginalImage,
+  getServerJobOutputTypes,
+  getServerJobProductPrice,
+  getServerJobProductType,
   getStorageNotConfiguredResponseBody,
   getStorageWriteFailedResponseBody,
+  hasServerJobFinalOutputSvg,
   hasServerJobFinalSvg,
   isStorageNotConfiguredError,
   isStorageWriteFailedError,
   markServerJobPaidWithPayPal,
   saveServerJobError,
+  saveServerJobFinalOutputSvg,
   saveServerJobFinalSvg,
   toJobSummary,
 } from "@/lib/server-job-store";
+import { OutputType } from "@/lib/job-types";
 import { vectorizeImage } from "@/lib/vectorizer";
 
 type RouteContext = {
@@ -100,6 +106,12 @@ function logPayPalCaptureEvent(
   });
 }
 
+function getCompletedOutputCount(
+  statuses: ReturnType<typeof getServerJobFinalOutputStatuses>,
+) {
+  return Number(statuses.single.ready) + Number(statuses.multi.ready);
+}
+
 export async function POST(request: Request, context: RouteContext) {
   const { orderId } = await context.params;
   let payload: { jobId?: string };
@@ -157,7 +169,7 @@ export async function POST(request: Request, context: RouteContext) {
     );
   }
 
-  const price = getCutPrice(job.cutType);
+  const price = getServerJobProductPrice(job);
   const expectedAmount = getExpectedPayPalAmount(price);
   const expectedAmountCents = price.amountCents;
 
@@ -320,6 +332,97 @@ export async function POST(request: Request, context: RouteContext) {
         { error: "Original image is not available for this job." },
         { status: 409 },
       );
+    }
+
+    if (getServerJobProductType(latestPaidJob) === "complete_pack") {
+      let workingJob = latestPaidJob;
+      const outputTypes = getServerJobOutputTypes(workingJob);
+      const failedOutputs: Array<{
+        outputType: OutputType;
+        error: string;
+        status?: number;
+        code: string;
+      }> = [];
+
+      for (const outputType of outputTypes) {
+        if (hasServerJobFinalOutputSvg(workingJob, outputType)) {
+          continue;
+        }
+
+        const vectorizerResult = await vectorizeImage({
+          imageBuffer,
+          filename: job.fileName,
+          cutType: outputType,
+          contentType: job.fileType,
+          mode: "production",
+        });
+
+        if (!vectorizerResult.ok) {
+          console.error("[Vectorizer.AI] PayPal complete pack output failed", {
+            jobId: job.id,
+            orderId,
+            outputType,
+            code: vectorizerResult.code,
+            status: vectorizerResult.status ?? null,
+            error: vectorizerResult.error,
+          });
+
+          const failedJob = await saveServerJobError({
+            jobId: job.id,
+            error: vectorizerResult.error,
+            status: vectorizerResult.status,
+            stage: "final",
+            outputType,
+            paypalPayment: paymentMetadata,
+          });
+
+          workingJob = failedJob ?? workingJob;
+          failedOutputs.push({
+            outputType,
+            error: vectorizerResult.error,
+            status: vectorizerResult.status,
+            code: vectorizerResult.code,
+          });
+          continue;
+        }
+
+        const outputJob = await saveServerJobFinalOutputSvg({
+          jobId: job.id,
+          outputType,
+          svgBuffer: vectorizerResult.svg,
+          creditsCalculated: vectorizerResult.creditsCalculated,
+          creditsCharged: vectorizerResult.creditsCharged,
+          paypalPayment: paymentMetadata,
+        });
+
+        workingJob = outputJob ?? workingJob;
+      }
+
+      const finalStatuses = getServerJobFinalOutputStatuses(workingJob);
+
+      if (failedOutputs.length > 0) {
+        return NextResponse.json(
+          {
+            error: "Final generation failed",
+            resultUrl,
+            completedOutputs: getCompletedOutputCount(finalStatuses),
+            failedOutputs: failedOutputs.map((failure) => failure.outputType),
+          },
+          {
+            status: failedOutputs.some(
+              (failure) => failure.code === "missing_credentials",
+            )
+              ? 503
+              : 502,
+          },
+        );
+      }
+
+      return NextResponse.json({
+        resultUrl,
+        job: toJobSummary(workingJob),
+        finalOutputs: finalStatuses,
+      });
     }
 
     const vectorizerResult = await vectorizeImage({

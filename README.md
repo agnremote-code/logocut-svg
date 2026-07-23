@@ -64,6 +64,12 @@ AUTH_SECRET="replace-with-a-random-32-byte-secret"
 EMAIL_FROM="LogoCut SVG <support@logocutsvg.com>"
 EMAIL_PROVIDER_API_KEY="your-transactional-email-api-key"
 
+# Optional Email List MVP.
+SUPABASE_URL="https://your-project.supabase.co"
+SUPABASE_SERVICE_ROLE_KEY="your-supabase-service-role-key"
+RESEND_API_KEY="re_your-resend-api-key"
+MARKETING_TOKEN_SECRET="replace-with-a-random-32-byte-secret"
+
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
 
 # Optional for local durable Blob testing.
@@ -79,6 +85,9 @@ Notes:
 - Stripe code remains available in the repo, but PayPal is the active one-time checkout path.
 - Stripe Billing is selected for the planned `LogoCut Unlimited` subscription because it provides hosted subscription Checkout, verified subscription webhooks, failed-payment lifecycle events and Customer Portal subscription management.
 - Do not enable `LogoCut Unlimited` publicly until subscriber auth, verified webhooks, cancellation, billing management and monthly usage enforcement have passed end-to-end tests.
+- `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are server-only values for the optional marketing email list. Do not expose the service role key to the browser.
+- `RESEND_API_KEY` and `EMAIL_FROM` send the optional signup confirmation email.
+- `MARKETING_TOKEN_SECRET` signs purpose-bound unsubscribe links. Email addresses are not placed directly in unsubscribe URLs.
 - Vercel Blob stores uploaded images, generated SVG files, and job metadata JSON.
 - For local durable Blob testing, use `BLOB_READ_WRITE_TOKEN`.
 - In Vercel, a connected Blob store can provide `BLOB_STORE_ID` through system environment variables and the Blob SDK uses Vercel OIDC automatically; `BLOB_READ_WRITE_TOKEN` is optional in that setup.
@@ -131,3 +140,19 @@ http://localhost:3000/internal/test-suite
 ```
 
 It is for manual QA of logo quality heuristics and SVG output behavior.
+
+## Email List MVP
+
+The marketing email list is optional and separate from purchases. Customers can
+preview, pay and download without entering an email address. Submitting the
+email card requires an unchecked consent box to be checked first.
+
+Run the Supabase migration in:
+
+```text
+supabase/migrations/202607230001_create_marketing_contacts.sql
+```
+
+The app updates duplicate signups by `normalized_email` instead of creating
+duplicate rows. PayPal payer emails are not added to the marketing table and are
+not sent to analytics.

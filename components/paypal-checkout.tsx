@@ -24,10 +24,12 @@ export function PayPalCheckout({
   jobId,
   cutType,
   productType,
+  recoveryEmail,
 }: {
   jobId: string;
   cutType: CutType;
   productType: OneTimeProductType;
+  recoveryEmail?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewedRef = useRef(false);
@@ -65,10 +67,31 @@ export function PayPalCheckout({
           const response = await fetch("/api/paypal/orders", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ jobId, cutType, productType }),
+            body: JSON.stringify({ jobId, cutType, productType, recoveryEmail }),
           });
           const payload = (await response.json()) as { orderId?: string; error?: string };
-          if (!response.ok || !payload.orderId) throw new Error("order failed");
+          if (!response.ok || !payload.orderId) {
+            throw new Error(payload.error ?? "order failed");
+          }
+          trackEvent("checkout_started", {
+            cut_type: cutType,
+            product_type: productType,
+            source_page: "conversion_studio",
+            value:
+              productType === "complete_pack"
+                ? 12
+                : productType === "layered_svg"
+                  ? 9
+                  : 5,
+            currency: "USD",
+          });
+          if (recoveryEmail?.trim()) {
+            trackEvent("recovery_email_requested", {
+              cut_type: cutType,
+              product_type: productType,
+              source_page: "conversion_studio",
+            });
+          }
           trackEvent("paypal_order_created", {
             cut_type: cutType,
             product_type: productType,
@@ -83,9 +106,13 @@ export function PayPalCheckout({
           });
           operationRef.current = "idle";
           return payload.orderId;
-        } catch {
+        } catch (orderError) {
           setProcessing(false);
-          setError("Checkout could not be started. Please try again.");
+          setError(
+            orderError instanceof Error && orderError.message !== "order failed"
+              ? orderError.message
+              : "Checkout could not be started. Please try again.",
+          );
           throw new Error("PayPal order creation failed");
         }
       },
@@ -144,7 +171,7 @@ export function PayPalCheckout({
       active = false;
       container.innerHTML = "";
     };
-  }, [cutType, jobId, productType, sdkReady]);
+  }, [cutType, jobId, productType, recoveryEmail, sdkReady]);
 
   if (!clientId) {
     return <p className="checkout-error">PayPal is temporarily unavailable.</p>;

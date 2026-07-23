@@ -12,12 +12,18 @@ import {
   OneTimeProductType,
   OutputType,
   PaymentStatus,
+  RecoveryEmailStatus,
   getDefaultProductTypeForOutput,
   getProductOutputTypes,
 } from "@/lib/job-types";
 import { createHash } from "node:crypto";
 import { canonicalStateForLegacyJob } from "@/lib/job-flow";
 import { getOneTimeProductPrice } from "@/lib/pricing";
+import {
+  canStoreRecoveryEmail,
+  encryptRecoveryEmail,
+} from "@/lib/secure-email";
+import { getRecoveryExpiresAt } from "@/lib/recovery-token";
 
 type VectorizerMode = "test" | "production";
 type StoredFileStatus = "not_started" | "processing" | "ready" | "failed";
@@ -51,6 +57,15 @@ export type ServerJobRecord = JobSummary & {
   paidAt?: string;
   amountPaid?: string;
   currency?: string;
+  recoveryEmailRequested?: boolean;
+  recoveryEmailStatus?: RecoveryEmailStatus;
+  recoveryEmailEncrypted?: string;
+  recoveryEmailIv?: string;
+  recoveryEmailTag?: string;
+  recoveryEmailHash?: string;
+  recoveryEmailSentAt?: string;
+  recoveryEmailError?: string;
+  recoveryTokenExpiresAt?: string;
   originalPathname?: string;
   originalBlobPath?: string;
   originalImageUrl?: string;
@@ -428,6 +443,8 @@ function createBaseJob(input: CreateServerJobInput): ServerJobRecord {
     finalStatus: "not_started",
     finalSingleStatus: "not_started",
     finalMultiStatus: "not_started",
+    recoveryEmailRequested: false,
+    recoveryEmailStatus: "not_requested",
     errorMessages: [],
     canonicalState: "uploaded",
     sourceHash: createHash("sha256").update(input.imageBuffer).digest("hex"),
@@ -768,6 +785,75 @@ export async function savePayPalOrder({
     job.paymentStatus = "unpaid";
     job.status = "awaiting_payment";
     job.canonicalState = "checkout_ready";
+  });
+}
+
+export async function saveRecoveryEmailRequest({
+  jobId,
+  email,
+}: {
+  jobId: string;
+  email: string;
+}) {
+  return updateServerJob(jobId, (job) => {
+    job.recoveryEmailRequested = true;
+
+    if (!canStoreRecoveryEmail()) {
+      job.recoveryEmailStatus = "disabled";
+      job.recoveryEmailError = "email_storage_not_configured";
+      return;
+    }
+
+    const encryptedEmail = encryptRecoveryEmail(email);
+
+    if (!encryptedEmail) {
+      job.recoveryEmailStatus = "disabled";
+      job.recoveryEmailError = "email_storage_not_configured";
+      return;
+    }
+
+    job.recoveryEmailEncrypted = encryptedEmail.encrypted;
+    job.recoveryEmailIv = encryptedEmail.iv;
+    job.recoveryEmailTag = encryptedEmail.tag;
+    job.recoveryEmailHash = encryptedEmail.hash;
+    job.recoveryEmailStatus = "pending";
+    job.recoveryEmailError = undefined;
+    job.recoveryTokenExpiresAt = job.recoveryTokenExpiresAt ?? getRecoveryExpiresAt();
+  });
+}
+
+export async function markRecoveryEmailSent(
+  jobId: string,
+  expiresAt: string,
+) {
+  return updateServerJob(jobId, (job) => {
+    job.recoveryEmailRequested = true;
+    job.recoveryEmailStatus = "sent";
+    job.recoveryEmailSentAt = new Date().toISOString();
+    job.recoveryEmailError = undefined;
+    job.recoveryTokenExpiresAt = expiresAt;
+  });
+}
+
+export async function markRecoveryEmailDisabled(jobId: string) {
+  return updateServerJob(jobId, (job) => {
+    if (!job.recoveryEmailRequested) {
+      return;
+    }
+
+    job.recoveryEmailStatus = "disabled";
+    job.recoveryEmailError = "email_provider_not_configured";
+  });
+}
+
+export async function markRecoveryEmailFailed(jobId: string) {
+  return updateServerJob(jobId, (job) => {
+    if (!job.recoveryEmailRequested) {
+      return;
+    }
+
+    job.recoveryEmailStatus = "failed";
+    job.recoveryEmailError = "email_delivery_failed";
   });
 }
 

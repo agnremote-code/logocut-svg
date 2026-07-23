@@ -2,8 +2,16 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { ResultViewer } from "@/components/result-viewer";
-import { saveClientJob } from "@/lib/client-job-store";
+import {
+  clearActiveConversion,
+  getActiveConversion,
+  getClientJob,
+  saveActiveConversion,
+  saveClientJob,
+} from "@/lib/client-job-store";
 import {
   ACCEPTED_FILE_TYPES,
   CUT_OPTIONS,
@@ -161,7 +169,26 @@ function PreviewGenerationError({
   );
 }
 
+function CheckoutTrustCopy() {
+  return (
+    <div className="checkout-trust-copy" aria-label="Checkout reassurance">
+      <span>One-time payment</span>
+      <span>No subscription</span>
+      <span>Secure PayPal checkout</span>
+      <span>Preview before payment</span>
+      <span>Immediate download</span>
+      <span>Support if generation fails</span>
+      <nav aria-label="Checkout policies">
+        <Link href="/support">Refund/support policy</Link>
+        <Link href="/privacy">Privacy policy</Link>
+        <Link href="/terms">Terms of use</Link>
+      </nav>
+    </div>
+  );
+}
+
 export function ConversionStudio() {
+  const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const studio = useRef<HTMLElement>(null);
   const previewDisplayedJobRef = useRef("");
@@ -180,6 +207,9 @@ export function ConversionStudio() {
     useState<PreviewFailureCode | null>(null);
   const [jobId, setJobId] = useState("");
   const [drag, setDrag] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [restoreMessage, setRestoreMessage] = useState("");
+  const [restoredResultUrl, setRestoredResultUrl] = useState("");
 
   const demoOriginal = `/demo/generated/${samples[sample][0]}-original.png`;
   const demoResult = `/demo/generated/${samples[sample][0]}.svg`;
@@ -199,6 +229,104 @@ export function ConversionStudio() {
     },
     [userOriginalUrl],
   );
+
+  useEffect(() => {
+    let active = true;
+
+    async function restoreActiveConversion() {
+      const activeConversion = getActiveConversion();
+
+      if (!activeConversion?.jobId) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/jobs/${activeConversion.jobId}`);
+        const payload = (await response.json()) as {
+          job?: JobSummary;
+          productType?: OneTimeProductType;
+          previewReady?: boolean;
+          svgReady?: boolean;
+          paymentStatus?: "unpaid" | "paid";
+        };
+
+        if (!active || !response.ok || !payload.job) {
+          clearActiveConversion();
+          return;
+        }
+
+        const product =
+          payload.productType ??
+          payload.job.productType ??
+          activeConversion.productType;
+        const previewMode = payload.job.cutType ?? activeConversion.previewMode;
+        setCut(previewMode);
+        setProductType(product);
+        setJobId(payload.job.id);
+
+        if (payload.paymentStatus === "paid" || payload.svgReady) {
+          setRestoredResultUrl(`/result/${payload.job.id}`);
+          setRestoreMessage("Your paid result is still available.");
+          setState("paid_result");
+          saveActiveConversion({
+            jobId: payload.job.id,
+            cutType: previewMode,
+            productType: product,
+            previewMode,
+            previewStatus: payload.previewReady ? "ready" : "not_started",
+            paymentStatus: "paid",
+            svgReady: Boolean(payload.svgReady),
+          });
+          return;
+        }
+
+        if (!payload.previewReady) {
+          clearActiveConversion();
+          return;
+        }
+
+        const storedJob = await getClientJob(payload.job.id).catch(() => null);
+
+        if (!active) {
+          return;
+        }
+
+        if (!storedJob?.imageBlob) {
+          setRestoredResultUrl(`/result/${payload.job.id}`);
+          setRestoreMessage("Your preview is still available.");
+          setState("file_selected");
+          return;
+        }
+
+        const restoredFile = new File([storedJob.imageBlob], payload.job.fileName, {
+          type: payload.job.fileType,
+        });
+        setFile(restoredFile);
+        setUserOriginalUrl(URL.createObjectURL(restoredFile));
+        setPreviewCut(previewMode);
+        setPreviewReference(`/api/jobs/${payload.job.id}/preview`);
+        setRestoreMessage("Your previous preview was restored.");
+        await loadPreviewAsset(`/api/jobs/${payload.job.id}/preview`);
+        saveActiveConversion({
+          jobId: payload.job.id,
+          cutType: previewMode,
+          productType: product,
+          previewMode,
+          previewStatus: "ready",
+          paymentStatus: "unpaid",
+          svgReady: false,
+        });
+      } catch {
+        clearActiveConversion();
+      }
+    }
+
+    void restoreActiveConversion();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(
     () => () => {
@@ -220,6 +348,19 @@ export function ConversionStudio() {
     setPreviewCut(null);
     setPreviewFailureCode(null);
     setJobId("");
+  };
+
+  const startNewConversion = () => {
+    clearActiveConversion();
+    clearRealPreview();
+    setFile(null);
+    setUserOriginalUrl(null);
+    setRecoveryEmail("");
+    setRestoredResultUrl("");
+    setRestoreMessage("");
+    setError("");
+    setState("demo");
+    trackEvent("new_conversion_started", { source_page: "conversion_studio" });
   };
 
   const loadPreviewAsset = async (reference: string) => {
@@ -254,7 +395,14 @@ export function ConversionStudio() {
     setUserOriginalUrl(URL.createObjectURL(nextFile));
     clearRealPreview();
     setState("file_selected");
+    setRestoredResultUrl("");
+    setRestoreMessage("");
     trackEvent("upload_completed", {
+      source_page: "homepage_studio",
+      file_type: nextFile.type,
+      cut_type: cut,
+    });
+    trackEvent("file_accepted", {
       source_page: "homepage_studio",
       file_type: nextFile.type,
       cut_type: cut,
@@ -275,6 +423,7 @@ export function ConversionStudio() {
 
   const resetStalePreviewAfterModeChange = () => {
     if (state === "preview_ready" || state === "paid_result") {
+      clearActiveConversion();
       clearRealPreview();
       setError("Settings changed. Generate a new preview to update the SVG.");
       setState("file_selected");
@@ -301,6 +450,16 @@ export function ConversionStudio() {
 
   const selectProductType = (nextProductType: OneTimeProductType) => {
     setProductType(nextProductType);
+    trackEvent("product_selected", {
+      product_type: nextProductType,
+      price:
+        nextProductType === "complete_pack"
+          ? 12
+          : nextProductType === "layered_svg"
+            ? 9
+            : 5,
+      source_page: "homepage_studio",
+    });
 
     if (nextProductType === "complete_pack" && cut !== "multi") {
       setCut("multi");
@@ -345,11 +504,18 @@ export function ConversionStudio() {
       preview_mode: cut,
       file_type: file.type,
     });
+    trackEvent("preview_started", {
+      source_page: "homepage_studio",
+      cut_type: cut,
+      preview_mode: cut,
+      file_type: file.type,
+    });
 
     try {
       const form = new FormData();
       form.append("image", file);
       form.append("cutType", cut);
+      form.append("productType", productType);
       const createResponse = await fetch("/api/jobs", { method: "POST", body: form });
       const createPayload = (await createResponse.json()) as {
         job?: JobSummary;
@@ -365,6 +531,15 @@ export function ConversionStudio() {
       }
 
       await saveClientJob({ ...createPayload.job, imageBlob: file }).catch(() => undefined);
+      saveActiveConversion({
+        jobId: createPayload.job.id,
+        cutType: cut,
+        productType,
+        previewMode: cut,
+        previewStatus: "not_started",
+        paymentStatus: "unpaid",
+        svgReady: false,
+      });
       const previewResponse = await fetch(`/api/jobs/${createPayload.job.id}/vectorize`, {
         method: "POST",
       });
@@ -397,6 +572,15 @@ export function ConversionStudio() {
           ? `data:image/svg+xml;base64,${previewPayload.previewAsset.base64}`
           : reference;
       await loadPreviewAsset(immediatePreview);
+      saveActiveConversion({
+        jobId: createPayload.job.id,
+        cutType: cut,
+        productType,
+        previewMode: cut,
+        previewStatus: "ready",
+        paymentStatus: "unpaid",
+        svgReady: false,
+      });
       trackEvent("preview_generated", {
         source_page: "homepage_studio",
         cut_type: cut,
@@ -448,6 +632,17 @@ export function ConversionStudio() {
     setPreviewFailureCode("vectorizer_error");
     setError(getPreviewFailureMessage("vectorizer_error"));
     setState("preview_error");
+    if (jobId) {
+      saveActiveConversion({
+        jobId,
+        cutType: cut,
+        productType,
+        previewMode: cut,
+        previewStatus: "failed",
+        paymentStatus: "unpaid",
+        svgReady: false,
+      });
+    }
     trackEvent("preview_failed", {
       source_page: "homepage_studio",
       cut_type: cut,
@@ -585,6 +780,14 @@ export function ConversionStudio() {
             <p>{previewHelperCopy[cut]}</p>
           </div>
         ) : null}
+        {restoreMessage ? (
+          <div className="restore-banner">
+            <p>{restoreMessage}</p>
+            <button className="text-button" type="button" onClick={startNewConversion}>
+              Start a new conversion
+            </button>
+          </div>
+        ) : null}
         {hasMatchingPreview ? (
           <div className="purchase-summary">
             <span className="success-pill">Free Watermarked Preview</span>
@@ -631,7 +834,24 @@ export function ConversionStudio() {
               <li>Instant download after processing</li>
               <li>No subscription</li>
             </ul>
-            <PayPalCheckout jobId={jobId} cutType={cut} productType={productType} />
+            <label className="recovery-email-field">
+              <span>Email me my download link</span>
+              <input
+                type="email"
+                value={recoveryEmail}
+                onChange={(event) => setRecoveryEmail(event.target.value)}
+                placeholder="you@example.com"
+                autoComplete="email"
+              />
+              <small>Optional. No account required.</small>
+            </label>
+            <CheckoutTrustCopy />
+            <PayPalCheckout
+              jobId={jobId}
+              cutType={cut}
+              productType={productType}
+              recoveryEmail={recoveryEmail}
+            />
             <button className="text-button" onClick={() => setState("file_selected")}>
               Adjust Settings
             </button>
@@ -656,6 +876,29 @@ export function ConversionStudio() {
             badge="Example conversion"
             title={samples[sample][2]}
           />
+        ) : null}
+        {state === "paid_result" && restoredResultUrl ? (
+          <div className="selected-file-result" aria-live="polite">
+            <div className="selected-file-heading">
+              <span className="selected-state-badge">RESULT READY</span>
+              <h3>Your paid SVG is available</h3>
+              <p>Continue to your result page to download your files.</p>
+            </div>
+            <div className="empty-svg-preview">
+              <span aria-hidden="true">✓</span>
+              <strong>Download links are ready</strong>
+              <button
+                className="primary-button"
+                type="button"
+                onClick={() => router.push(restoredResultUrl)}
+              >
+                Continue to downloads
+              </button>
+              <button className="secondary-button" type="button" onClick={startNewConversion}>
+                Start a new conversion
+              </button>
+            </div>
+          </div>
         ) : null}
         {state === "file_selected" && userOriginalUrl && file ? (
           <SelectedFilePlaceholder original={userOriginalUrl} title={file.name} />

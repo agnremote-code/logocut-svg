@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { ConversionStudio } from "@/components/conversion-studio";
 import { SiteFooter } from "@/components/site-footer";
 import { openUploader } from "@/components/uploader-trigger";
-import { trackEvent } from "@/lib/analytics";
+import { captureAttribution, trackEvent } from "@/lib/analytics";
 
 const steps=[["01","Upload your image","Choose any PNG, JPG or JPEG up to 10 MB."],["02","Judge the preview","Compare the original and SVG in the same studio."],["03","Unlock the clean file","Pay once only when the result looks right."]];
 const cases=["Vinyl decals","T-shirts & HTV","Stickers","Tumblers","Business logos","Signs","Cricut projects","Silhouette projects"];
@@ -18,7 +18,7 @@ const faqs=[
 ];
 const start=()=>openUploader("lower_page_cta");
 
-export function HomePage(){useEffect(()=>trackEvent("homepage_view",{source_page:"homepage"}),[]);return <main className="premium-page">
+export function HomePage(){useEffect(()=>{captureAttribution();trackEvent("landing_page_view",{source_page:"homepage"});trackEvent("homepage_view",{source_page:"homepage"})},[]);return <main className="premium-page">
  <nav className="premium-nav"><Link href="/" className="brand"><span>LC</span>LogoCut</Link><div className="nav-links"><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a></div><button className="nav-cta" onClick={start}>Try it free</button></nav>
  <header className="premium-hero"><p className="hero-pill">IMAGE TO SVG, WITHOUT THE GUESSWORK</p><h1>Convert Any Image Into a Clean, Cut-Ready SVG</h1><p>Upload a PNG or JPG, preview the result for free, and pay only when it looks right.</p><span>No account · No subscription · Single-color $5 · Layered $9 · Both for $12</span></header>
  <div className="studio-wrap"><ConversionStudio/></div>

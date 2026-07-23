@@ -64,7 +64,13 @@ AUTH_SECRET="replace-with-a-random-32-byte-secret"
 EMAIL_FROM="LogoCut SVG <support@logocutsvg.com>"
 EMAIL_PROVIDER_API_KEY="your-transactional-email-api-key"
 
-NEXT_PUBLIC_APP_URL="http://localhost:3000"
+# Optional one-time purchase recovery email.
+# If omitted, checkout still works and recovery email delivery is disabled.
+RESEND_API_KEY="re_your-resend-api-key"
+RESEND_FROM_EMAIL="LogoCut SVG <support@logocutsvg.com>"
+RECOVERY_TOKEN_SECRET="replace-with-a-random-32-byte-secret"
+LOGOCUT_SUPPORT_EMAIL="support@logocutsvg.com"
+NEXT_PUBLIC_SITE_URL="http://localhost:3000"
 
 # Optional for local durable Blob testing.
 BLOB_READ_WRITE_TOKEN="vercel-blob-read-write-token"
@@ -77,6 +83,11 @@ Notes:
 - `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET` are used server-side for the PayPal Orders API.
 - `PAYPAL_ENVIRONMENT` must be `sandbox` or `live`; use `sandbox` until launch.
 - Stripe code remains available in the repo, but PayPal is the active one-time checkout path.
+- One-time recovery email uses Resend when `RESEND_API_KEY`,
+  `RESEND_FROM_EMAIL`, and `RECOVERY_TOKEN_SECRET` are configured. If any are
+  missing, checkout and downloads still work and email delivery is disabled.
+- Recovery email addresses are encrypted in the private job metadata and are
+  never sent to GA4.
 - Stripe Billing is selected for the planned `LogoCut Unlimited` subscription because it provides hosted subscription Checkout, verified subscription webhooks, failed-payment lifecycle events and Customer Portal subscription management.
 - Do not enable `LogoCut Unlimited` publicly until subscriber auth, verified webhooks, cancellation, billing management and monthly usage enforcement have passed end-to-end tests.
 - Vercel Blob stores uploaded images, generated SVG files, and job metadata JSON.

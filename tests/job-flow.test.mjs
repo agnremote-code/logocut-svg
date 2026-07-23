@@ -127,6 +127,123 @@ test("preview failures use safe code-based messages and support retry without re
   assert.doesNotMatch(source, /Try a clearer logo/);
 });
 
+test("checkout supports optional recovery email without requiring accounts", async () => {
+  const paypal = await readFile(new URL("../app/api/paypal/orders/route.ts", import.meta.url), "utf8");
+  const checkout = await readFile(new URL("../components/paypal-checkout.tsx", import.meta.url), "utf8");
+  const result = await readFile(new URL("../app/result/[jobId]/result-client.tsx", import.meta.url), "utf8");
+  assert.match(paypal, /validateOptionalEmail\(payload\.recoveryEmail\)/);
+  assert.match(paypal, /saveRecoveryEmailRequest/);
+  assert.match(checkout, /recoveryEmail\?: string/);
+  assert.match(checkout, /recoveryEmail/);
+  assert.match(result, /Email me my download link/);
+  assert.match(result, /Optional\. Your purchase still works without email\./);
+});
+
+test("recovery email validation normalizes valid emails and rejects invalid emails", async () => {
+  const source = await readFile(new URL("../lib/secure-email.ts", import.meta.url), "utf8");
+  assert.match(source, /return value\.trim\(\)\.toLowerCase\(\)/);
+  assert.match(source, /EMAIL_PATTERN\.test\(email\)/);
+  assert.match(source, /Invalid email address\./);
+});
+
+test("email provider unavailable disables delivery without blocking capture", async () => {
+  const email = await readFile(new URL("../lib/recovery-email.ts", import.meta.url), "utf8");
+  const capture = await readFile(new URL("../app/api/paypal/orders/[orderId]/capture/route.ts", import.meta.url), "utf8");
+  assert.match(email, /markRecoveryEmailDisabled/);
+  assert.match(email, /!apiKey \|\| !from \|\| !email \|\| !token/);
+  assert.match(capture, /sendRecoveryEmailWithoutBlocking/);
+  assert.match(capture, /delivery failed without blocking checkout/);
+});
+
+test("successful recovery email uses a signed link and no raw Blob URLs", async () => {
+  const email = await readFile(new URL("../lib/recovery-email.ts", import.meta.url), "utf8");
+  assert.match(email, /https:\/\/api\.resend\.com\/emails/);
+  assert.match(email, /createRecoveryToken/);
+  assert.match(email, /\/recover\/\$\{encodeURIComponent\(token\)\}/);
+  assert.doesNotMatch(email, /previewSvgUrl/);
+  assert.doesNotMatch(email, /finalSvgUrl/);
+});
+
+test("recovery tokens fail safely when expired or modified", async () => {
+  const token = await readFile(new URL("../lib/recovery-token.ts", import.meta.url), "utf8");
+  const page = await readFile(new URL("../app/recover/[token]/page.tsx", import.meta.url), "utf8");
+  assert.match(token, /timingSafeEqual/);
+  assert.match(token, /reason: "expired"/);
+  assert.match(token, /reason: "invalid"/);
+  assert.match(token, /verifyRecoveryTokenForJob/);
+  assert.match(page, /This download link is no longer valid/);
+});
+
+test("recovery link cannot authorize a different job", async () => {
+  const token = await readFile(new URL("../lib/recovery-token.ts", import.meta.url), "utf8");
+  assert.match(token, /verifyRecoveryTokenForJob/);
+  assert.match(token, /result\.jobId !== jobId/);
+});
+
+test("refresh restores unpaid previews and paid results from existing stores", async () => {
+  const clientStore = await readFile(new URL("../lib/client-job-store.ts", import.meta.url), "utf8");
+  const studio = await readFile(new URL("../components/conversion-studio.tsx", import.meta.url), "utf8");
+  const result = await readFile(new URL("../app/result/[jobId]/result-client.tsx", import.meta.url), "utf8");
+  assert.match(clientStore, /ACTIVE_CONVERSION_KEY/);
+  assert.match(clientStore, /saveActiveConversion/);
+  assert.match(studio, /restoreActiveConversion/);
+  assert.match(studio, /Your previous preview was restored\./);
+  assert.match(studio, /Your paid result is still available\./);
+  assert.match(result, /saveActiveConversion/);
+});
+
+test("changed output invalidates stale preview and demo assets never mix with uploads", async () => {
+  const studio = await readFile(new URL("../components/conversion-studio.tsx", import.meta.url), "utf8");
+  assert.match(studio, /resetStalePreviewAfterModeChange/);
+  assert.match(studio, /clearActiveConversion\(\)/);
+  assert.match(studio, /state === "demo"/);
+  assert.match(studio, /state === "file_selected"/);
+  assert.match(studio, /previewCut === cut/);
+});
+
+test("purchase analytics are deduplicated and do not send private job data", async () => {
+  const analytics = await readFile(new URL("../lib/analytics.ts", import.meta.url), "utf8");
+  assert.match(analytics, /trackPurchaseOnce/);
+  assert.match(analytics, /localStorage\.getItem\(storageKey\)/);
+  assert.doesNotMatch(analytics, /email\?:/);
+  assert.doesNotMatch(analytics, /email_address/);
+  assert.doesNotMatch(analytics, /fileName/);
+  assert.doesNotMatch(analytics, /jobId/);
+});
+
+test("funnel analytics and UTM attribution use safe event names", async () => {
+  const analytics = await readFile(new URL("../lib/analytics.ts", import.meta.url), "utf8");
+  for (const event of [
+    "landing_page_view",
+    "file_accepted",
+    "preview_started",
+    "preview_failed",
+    "preview_retry_clicked",
+    "preview_displayed",
+    "product_selected",
+    "checkout_started",
+    "purchase_completed",
+    "final_svg_ready",
+    "download_clicked",
+    "recovery_email_requested",
+    "recovery_email_sent",
+    "recovery_link_opened",
+    "new_conversion_started",
+  ]) {
+    assert.match(analytics, new RegExp(`"${event}"`));
+  }
+  assert.match(analytics, /captureAttribution/);
+  assert.match(analytics, /utm_source/);
+});
+
+test("Convert another image clears paid state safely", async () => {
+  const result = await readFile(new URL("../app/result/[jobId]/result-client.tsx", import.meta.url), "utf8");
+  assert.match(result, /Need another file converted\?/);
+  assert.match(result, /Convert another image/);
+  assert.match(result, /clearActiveConversion\(\)/);
+  assert.match(result, /new_conversion_started/);
+});
+
 test("Vectorizer receives distinct single-color and layered output options", async () => {
   const source = await readFile(new URL("../lib/vectorizer.ts", import.meta.url), "utf8");
   assert.match(source, /function appendOutputOptions/);

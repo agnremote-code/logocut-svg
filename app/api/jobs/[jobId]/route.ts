@@ -59,5 +59,6 @@ export async function GET(_request: Request, context: RouteContext) {
     vectorizerStatus: job.vectorizerStatus ?? null,
     creditsCalculated: job.creditsCalculated ?? null,
     creditsCharged: job.creditsCharged ?? null,
+    recoveryEmailStatus: job.recoveryEmailStatus ?? "not_requested",
   });
 }

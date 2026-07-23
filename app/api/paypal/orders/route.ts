@@ -13,6 +13,7 @@ import {
   isPayPalNotConfiguredError,
 } from "@/lib/paypal";
 import { getOneTimeProductPrice } from "@/lib/pricing";
+import { validateOptionalEmail } from "@/lib/secure-email";
 import {
   getServerJob,
   getServerJobOriginalImage,
@@ -24,6 +25,7 @@ import {
   isStorageNotConfiguredError,
   isStorageWriteFailedError,
   savePayPalOrder,
+  saveRecoveryEmailRequest,
 } from "@/lib/server-job-store";
 import { canCheckoutJob } from "@/lib/job-flow";
 
@@ -145,13 +147,19 @@ function logPayPalOrderError(
 }
 
 export async function POST(request: Request) {
-  let payload: { jobId?: string; cutType?: unknown; productType?: unknown };
+  let payload: {
+    jobId?: string;
+    cutType?: unknown;
+    productType?: unknown;
+    recoveryEmail?: unknown;
+  };
 
   try {
     payload = (await request.json()) as {
       jobId?: string;
       cutType?: unknown;
       productType?: unknown;
+      recoveryEmail?: unknown;
     };
   } catch {
     return NextResponse.json(
@@ -197,6 +205,11 @@ export async function POST(request: Request) {
   const requestedProductType = isOneTimeProductType(payload.productType)
     ? payload.productType
     : getDefaultProductTypeForOutput(payload.cutType);
+  const recoveryEmail = validateOptionalEmail(payload.recoveryEmail);
+
+  if (!recoveryEmail.ok) {
+    return NextResponse.json({ error: recoveryEmail.error }, { status: 400 });
+  }
 
   if (hasServerJobFinalSvg(job)) {
     return NextResponse.json(
@@ -256,6 +269,13 @@ export async function POST(request: Request) {
         });
 
         if (reuseCheck.reusable) {
+          if (recoveryEmail.email) {
+            await saveRecoveryEmailRequest({
+              jobId: job.id,
+              email: recoveryEmail.email,
+            });
+          }
+
           return NextResponse.json({ orderId: job.paypalOrderId });
         }
 
@@ -283,6 +303,13 @@ export async function POST(request: Request) {
       paypalOrderId: orderId,
       productType,
     });
+
+    if (recoveryEmail.email) {
+      await saveRecoveryEmailRequest({
+        jobId: job.id,
+        email: recoveryEmail.email,
+      });
+    }
 
     logPayPalOrderEvent("created", {
       jobId: job.id,

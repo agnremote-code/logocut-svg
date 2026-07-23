@@ -1,8 +1,26 @@
-import { ClientJobRecord, JobStatus } from "@/lib/job-types";
+import {
+  ClientJobRecord,
+  CutType,
+  JobStatus,
+  OneTimeProductType,
+  PaymentStatus,
+} from "@/lib/job-types";
 
 const DB_NAME = "logocut-svg";
 const STORE_NAME = "jobs";
 const DB_VERSION = 1;
+const ACTIVE_CONVERSION_KEY = "logocut_active_conversion";
+
+export type ActiveConversionRecord = {
+  jobId: string;
+  cutType: CutType;
+  productType: OneTimeProductType;
+  previewMode: CutType;
+  previewStatus: "not_started" | "ready" | "failed";
+  paymentStatus: PaymentStatus;
+  svgReady?: boolean;
+  updatedAt: string;
+};
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -65,4 +83,54 @@ export async function updateClientJobStatus(
   }
 
   await saveClientJob({ ...job, status });
+}
+
+export function saveActiveConversion(
+  record: Omit<ActiveConversionRecord, "updatedAt">,
+) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(
+    ACTIVE_CONVERSION_KEY,
+    JSON.stringify({ ...record, updatedAt: new Date().toISOString() }),
+  );
+}
+
+export function getActiveConversion(): ActiveConversionRecord | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(ACTIVE_CONVERSION_KEY);
+
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<ActiveConversionRecord>;
+
+    if (
+      typeof parsed.jobId !== "string" ||
+      (parsed.cutType !== "single" && parsed.cutType !== "multi") ||
+      (parsed.previewMode !== "single" && parsed.previewMode !== "multi") ||
+      (parsed.paymentStatus !== "unpaid" && parsed.paymentStatus !== "paid")
+    ) {
+      return null;
+    }
+
+    return parsed as ActiveConversionRecord;
+  } catch {
+    return null;
+  }
+}
+
+export function clearActiveConversion() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.removeItem(ACTIVE_CONVERSION_KEY);
 }

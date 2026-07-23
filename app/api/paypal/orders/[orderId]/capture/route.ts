@@ -26,6 +26,7 @@ import {
 } from "@/lib/server-job-store";
 import { OutputType } from "@/lib/job-types";
 import { vectorizeImage } from "@/lib/vectorizer";
+import { sendRecoveryEmailForJob } from "@/lib/recovery-email";
 
 type RouteContext = {
   params: Promise<{
@@ -110,6 +111,24 @@ function getCompletedOutputCount(
   statuses: ReturnType<typeof getServerJobFinalOutputStatuses>,
 ) {
   return Number(statuses.single.ready) + Number(statuses.multi.ready);
+}
+
+async function sendRecoveryEmailWithoutBlocking(jobId: string) {
+  try {
+    const result = await sendRecoveryEmailForJob(jobId);
+
+    console.info("[Recovery email] delivery result", {
+      jobId,
+      sent: result.sent,
+      reason: "reason" in result ? result.reason : undefined,
+    });
+  } catch (error) {
+    console.error("[Recovery email] delivery failed without blocking checkout", {
+      jobId,
+      errorName: error instanceof Error ? error.name : "unknown",
+      errorMessage: error instanceof Error ? error.message : "unknown",
+    });
+  }
 }
 
 export async function POST(request: Request, context: RouteContext) {
@@ -313,6 +332,7 @@ export async function POST(request: Request, context: RouteContext) {
     const latestPaidJob = (await getServerJob(job.id)) ?? paidJob ?? job;
 
     if (hasServerJobFinalSvg(latestPaidJob)) {
+      await sendRecoveryEmailWithoutBlocking(job.id);
       return NextResponse.json(
         {
           message: "Final generation already completed",
@@ -401,6 +421,7 @@ export async function POST(request: Request, context: RouteContext) {
       const finalStatuses = getServerJobFinalOutputStatuses(workingJob);
 
       if (failedOutputs.length > 0) {
+        await sendRecoveryEmailWithoutBlocking(job.id);
         return NextResponse.json(
           {
             error: "Final generation failed",
@@ -418,6 +439,7 @@ export async function POST(request: Request, context: RouteContext) {
         );
       }
 
+      await sendRecoveryEmailWithoutBlocking(job.id);
       return NextResponse.json({
         resultUrl,
         job: toJobSummary(workingJob),
@@ -466,6 +488,7 @@ export async function POST(request: Request, context: RouteContext) {
       paypalPayment: paymentMetadata,
     });
 
+    await sendRecoveryEmailWithoutBlocking(job.id);
     return NextResponse.json({
       resultUrl,
       job: readyJob ? toJobSummary(readyJob) : toJobSummary(job),

@@ -19,6 +19,12 @@ export type JobStatus =
   | "failed";
 
 export type PaymentStatus = "unpaid" | "paid";
+export type RecoveryEmailStatus =
+  | "not_requested"
+  | "pending"
+  | "sent"
+  | "disabled"
+  | "failed";
 
 export type ProcessingStep = {
   label: string;

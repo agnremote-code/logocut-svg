@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   CreateJobRequest,
   isCutType,
+  isOneTimeProductType,
   validateCreateJobRequest,
 } from "@/lib/job-types";
 import {
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
 
   const image = formData.get("image");
   const cutType = formData.get("cutType");
+  const productType = formData.get("productType");
 
   if (!(image instanceof File)) {
     return NextResponse.json(
@@ -45,12 +47,20 @@ export async function POST(request: Request) {
     );
   }
 
+  if (productType !== null && !isOneTimeProductType(productType)) {
+    return NextResponse.json(
+      { error: "Please choose a valid product." },
+      { status: 400 },
+    );
+  }
+
   const imageBuffer = Buffer.from(await image.arrayBuffer());
   const payload: Partial<CreateJobRequest> = {
     fileName: image.name,
     fileType: image.type,
     fileSize: imageBuffer.byteLength,
     cutType,
+    productType: isOneTimeProductType(productType) ? productType : undefined,
   };
 
   const validationError = validateCreateJobRequest(payload);
@@ -67,6 +77,7 @@ export async function POST(request: Request) {
       fileType: image.type,
       fileSize: imageBuffer.byteLength,
       cutType,
+      productType: isOneTimeProductType(productType) ? productType : undefined,
       imageBuffer,
     });
   } catch (error) {

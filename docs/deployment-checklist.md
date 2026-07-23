@@ -30,6 +30,14 @@ For the current MVP:
 - Use Vectorizer.AI production mode only after successful payment.
 - Connect Vercel Blob for uploaded images, generated SVG files, and job metadata JSON.
 - Confirm the project has either `BLOB_STORE_ID` from Vercel system environment variables with OIDC enabled or `BLOB_READ_WRITE_TOKEN` configured.
+- Optional purchase recovery email:
+  - `RESEND_API_KEY`
+  - `RESEND_FROM_EMAIL`
+  - `RECOVERY_TOKEN_SECRET`
+  - `LOGOCUT_SUPPORT_EMAIL`
+  - `NEXT_PUBLIC_SITE_URL`
+- If any recovery email variable is missing, checkout must still succeed and
+  email delivery should remain disabled gracefully.
 - Stripe code remains in the repo but is inactive in the public unlock UI.
 
 ## LogoCut Unlimited Later

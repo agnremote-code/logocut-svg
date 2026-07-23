@@ -1,9 +1,15 @@
 "use client";
 
 import Script from "next/script";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getClientJob, updateClientJobStatus } from "@/lib/client-job-store";
+import {
+  clearActiveConversion,
+  getClientJob,
+  saveActiveConversion,
+  updateClientJobStatus,
+} from "@/lib/client-job-store";
 import { trackEvent, trackPurchaseOnce } from "@/lib/analytics";
 import {
   ClientJobRecord,
@@ -49,8 +55,12 @@ declare global {
 
 export default function ResultClient({ jobId }: ResultClientProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const paypalButtonContainerRef = useRef<HTMLDivElement | null>(null);
   const resultViewTrackedRef = useRef(false);
+  const finalReadyTrackedRef = useRef(false);
+  const recoveryOpenedTrackedRef = useRef(false);
+  const recoveryEmailSentTrackedRef = useRef(false);
   const [job, setJob] = useState<ClientJobRecord | null>(null);
   const [serverJob, setServerJob] = useState<JobSummary | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -76,6 +86,8 @@ export default function ResultClient({ jobId }: ResultClientProps) {
   } | null>(null);
   const [productType, setProductType] =
     useState<OneTimeProductType>("single_svg");
+  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [downloadStarted, setDownloadStarted] = useState(false);
   const [finalOutputs, setFinalOutputs] = useState<{
     single?: { ready?: boolean; status?: string; error?: string | null };
     multi?: { ready?: boolean; status?: string; error?: string | null };
@@ -132,6 +144,7 @@ export default function ResultClient({ jobId }: ResultClientProps) {
             single?: { ready?: boolean; status?: string; error?: string | null };
             multi?: { ready?: boolean; status?: string; error?: string | null };
           };
+          recoveryEmailStatus?: string;
           error?: string;
         };
 
@@ -171,10 +184,41 @@ export default function ResultClient({ jobId }: ResultClientProps) {
             : null,
         );
 
+        if (payload.job) {
+          saveActiveConversion({
+            jobId: payload.job.id,
+            cutType: payload.job.cutType,
+            productType:
+              payload.productType ??
+              payload.job.productType ??
+              getDefaultProductTypeForOutput(payload.job.cutType),
+            previewMode: payload.job.cutType,
+            previewStatus: payload.previewReady ? "ready" : "not_started",
+            paymentStatus: payload.paymentStatus ?? "unpaid",
+            svgReady: Boolean(payload.svgReady),
+          });
+        }
+
         if (storedJob && payload.job?.status === "ready") {
           updateClientJobStatus(jobId, "ready");
         } else if (storedJob && payload.job?.status === "failed") {
           updateClientJobStatus(jobId, "failed");
+        }
+
+        if (
+          payload.recoveryEmailStatus === "sent" &&
+          !recoveryEmailSentTrackedRef.current
+        ) {
+          recoveryEmailSentTrackedRef.current = true;
+          trackEvent("recovery_email_sent", {
+            source_page: "result_page",
+            product_type:
+              payload.productType ??
+              payload.job?.productType ??
+              getDefaultProductTypeForOutput(
+                payload.job?.cutType ?? storedJob?.cutType ?? "single",
+              ),
+          });
         }
       })
       .catch(() => {
@@ -194,6 +238,15 @@ export default function ResultClient({ jobId }: ResultClientProps) {
   }, [jobId]);
 
   useEffect(() => {
+    if (recoveryOpenedTrackedRef.current || !searchParams.get("recovery")) {
+      return;
+    }
+
+    recoveryOpenedTrackedRef.current = true;
+    trackEvent("recovery_link_opened", { source_page: "result_page" });
+  }, [searchParams]);
+
+  useEffect(() => {
     if (!isLoading && (job || serverJob) && !resultViewTrackedRef.current) {
       resultViewTrackedRef.current = true;
       trackEvent("result_page_view", {
@@ -202,6 +255,19 @@ export default function ResultClient({ jobId }: ResultClientProps) {
       });
     }
   }, [activeCutType, isLoading, job, serverJob]);
+
+  useEffect(() => {
+    if (!isSvgReady || finalReadyTrackedRef.current) {
+      return;
+    }
+
+    finalReadyTrackedRef.current = true;
+    trackEvent("final_svg_ready", {
+      cut_type: activeCutType,
+      product_type: productType,
+      source_page: "result_page",
+    });
+  }, [activeCutType, isSvgReady, productType]);
 
   useEffect(() => {
     if (
@@ -298,7 +364,12 @@ export default function ResultClient({ jobId }: ResultClientProps) {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ jobId, cutType: activeCutType, productType }),
+          body: JSON.stringify({
+            jobId,
+            cutType: activeCutType,
+            productType,
+            recoveryEmail,
+          }),
         });
         const payload = (await response.json()) as {
           orderId?: string;
@@ -312,6 +383,25 @@ export default function ResultClient({ jobId }: ResultClientProps) {
           throw new Error(message);
         }
 
+        trackEvent("checkout_started", {
+          cut_type: activeCutType,
+          product_type: productType,
+          source_page: "result_page",
+          value:
+            productType === "complete_pack"
+              ? 12
+              : productType === "layered_svg"
+                ? 9
+                : 5,
+          currency: "USD",
+        });
+        if (recoveryEmail.trim()) {
+          trackEvent("recovery_email_requested", {
+            cut_type: activeCutType,
+            product_type: productType,
+            source_page: "result_page",
+          });
+        }
         trackEvent("paypal_order_created", {
           cut_type: activeCutType,
           product_type: productType,
@@ -395,6 +485,7 @@ export default function ResultClient({ jobId }: ResultClientProps) {
     jobId,
     paymentStatus,
     productType,
+    recoveryEmail,
   ]);
 
   const isCompletePack = productType === "complete_pack";
@@ -415,6 +506,26 @@ export default function ResultClient({ jobId }: ResultClientProps) {
   const unlockLabel = `Unlock with PayPal - ${activeProduct?.price ?? "$5"}`;
   const finalGenerationFailed =
     paymentStatus === "paid" && !isSvgReady && Boolean(resultError);
+
+  const trackDownload = (downloadCutType: CutType) => {
+    setDownloadStarted(true);
+    trackEvent("download_clicked", {
+      cut_type: downloadCutType,
+      product_type: productType,
+      source_page: "result_page",
+    });
+    trackEvent("svg_downloaded", {
+      cut_type: downloadCutType,
+      product_type: productType,
+      source_page: "result_page",
+    });
+  };
+
+  const startNewConversion = () => {
+    clearActiveConversion();
+    trackEvent("new_conversion_started", { source_page: "result_page" });
+    router.push("/");
+  };
 
   if (isLoading) {
     return (
@@ -621,13 +732,7 @@ export default function ResultClient({ jobId }: ResultClientProps) {
                     }`}
                     download={`${displayFileName.replace(/\.[^.]+$/, "")}-single-color-logocut.svg`}
                     href={`${svgDownloadUrl}?output=single`}
-                    onClick={() =>
-                      trackEvent("svg_downloaded", {
-                        cut_type: "single",
-                        product_type: productType,
-                        source_page: "result_page",
-                      })
-                    }
+                    onClick={() => trackDownload("single")}
                   >
                     Download Single-Color SVG
                   </a>
@@ -639,13 +744,7 @@ export default function ResultClient({ jobId }: ResultClientProps) {
                     }`}
                     download={`${displayFileName.replace(/\.[^.]+$/, "")}-layered-logocut.svg`}
                     href={`${svgDownloadUrl}?output=multi`}
-                    onClick={() =>
-                      trackEvent("svg_downloaded", {
-                        cut_type: "multi",
-                        product_type: productType,
-                        source_page: "result_page",
-                      })
-                    }
+                    onClick={() => trackDownload("multi")}
                   >
                     Download Layered SVG
                   </a>
@@ -655,13 +754,7 @@ export default function ResultClient({ jobId }: ResultClientProps) {
                   className="mt-5 flex h-14 w-full items-center justify-center rounded-[8px] bg-[#315f46] px-6 text-base font-semibold text-white shadow-[0_10px_24px_rgba(49,95,70,0.22)] transition hover:bg-[#264d39]"
                   download={downloadFileName}
                   href={svgDownloadUrl}
-                  onClick={() =>
-                    trackEvent("svg_downloaded", {
-                      cut_type: activeCutType,
-                      product_type: productType,
-                      source_page: "result_page",
-                    })
-                  }
+                  onClick={() => trackDownload(activeCutType)}
                 >
                   Download SVG
                 </a>
@@ -676,6 +769,30 @@ export default function ResultClient({ jobId }: ResultClientProps) {
                     Pay securely with PayPal. After payment, your clean SVG will
                     be generated and ready to download.
                   </p>
+                </div>
+                <label className="recovery-email-field result-email-field">
+                  <span>Email me my download link</span>
+                  <input
+                    type="email"
+                    value={recoveryEmail}
+                    onChange={(event) => setRecoveryEmail(event.target.value)}
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                  />
+                  <small>Optional. Your purchase still works without email.</small>
+                </label>
+                <div className="checkout-trust-copy result-trust-copy">
+                  <span>One-time payment</span>
+                  <span>No subscription</span>
+                  <span>Secure PayPal checkout</span>
+                  <span>Preview before payment</span>
+                  <span>Immediate download</span>
+                  <span>Support if generation fails</span>
+                  <nav aria-label="Checkout policies">
+                    <Link href="/support">Refund/support policy</Link>
+                    <Link href="/privacy">Privacy policy</Link>
+                    <Link href="/terms">Terms of use</Link>
+                  </nav>
                 </div>
 
                 {paypalClientId ? (
@@ -709,15 +826,25 @@ export default function ResultClient({ jobId }: ResultClientProps) {
             ) : null}
 
             {isSvgReady ? (
-              <p className="mt-4 rounded-[8px] border border-[#c9dfcf] bg-[#f1f8f2] px-4 py-3 text-sm font-semibold text-[#315f46]">
-                {isCompletePack
-                  ? "Complete SVG Pack ready. Both downloads are enabled."
-                  : "Clean SVG ready. Download is enabled."}
-                {creditsCalculated
-                  ? ` Credits calculated: ${creditsCalculated}.`
-                  : ""}
-                {creditsCharged ? ` Credits charged: ${creditsCharged}.` : ""}
-              </p>
+              <>
+                <p className="mt-4 rounded-[8px] border border-[#c9dfcf] bg-[#f1f8f2] px-4 py-3 text-sm font-semibold text-[#315f46]">
+                  {isCompletePack
+                    ? "Complete SVG Pack ready. Both downloads are enabled."
+                    : "Clean SVG ready. Download is enabled."}
+                  {creditsCalculated
+                    ? ` Credits calculated: ${creditsCalculated}.`
+                    : ""}
+                  {creditsCharged ? ` Credits charged: ${creditsCharged}.` : ""}
+                </p>
+                {downloadStarted ? (
+                  <div className="post-download-action">
+                    <h3>Need another file converted?</h3>
+                    <button className="secondary-button" type="button" onClick={startNewConversion}>
+                      Convert another image
+                    </button>
+                  </div>
+                ) : null}
+              </>
             ) : hasAnyCompleteOutput ? (
               <p className="mt-4 rounded-[8px] border border-[#d8c36b] bg-[#fff9dc] px-4 py-3 text-sm font-semibold text-[#6a5414]">
                 One file is ready. The missing file can be retried safely

@@ -1,6 +1,11 @@
 "use client";
 
 import { CutType, OneTimeProductType } from "@/lib/job-types";
+import { getCurrentAttribution, PaidAttribution } from "@/lib/attribution";
+import {
+  createPurchaseAnalyticsParams,
+  sanitizeAnalyticsParams,
+} from "@/lib/analytics-payload";
 
 type AnalyticsEventName =
   | "homepage_view"
@@ -55,6 +60,16 @@ type AnalyticsParams = {
   direction?: string;
   consent_source?: string;
   failure_reason?: string;
+  items?: AnalyticsItem[];
+} & PaidAttribution;
+
+type AnalyticsItem = {
+  item_id: string;
+  item_name: string;
+  price: number;
+  quantity: 1;
+  product_type: OneTimeProductType;
+  cut_type: CutType;
 };
 
 declare global {
@@ -62,55 +77,96 @@ declare global {
     gtag?: (
       command: "event",
       eventName: string,
-      params?: Record<string, string | number | undefined>,
+      params?: Record<string, unknown>,
     ) => void;
+    __logocutAnalyticsQueue?: Array<{
+      eventName: AnalyticsEventName;
+      params: Record<string, unknown>;
+    }>;
   }
 }
 
-function cleanParams(params: AnalyticsParams = {}) {
-  return Object.fromEntries(
-    Object.entries(params).filter(([, value]) => value !== undefined),
-  ) as Record<string, string | number | undefined>;
-}
+const purchaseMemory = new Set<string>();
 
 export function trackEvent(
   eventName: AnalyticsEventName,
   params: AnalyticsParams = {},
 ) {
+  if (
+    typeof window === "undefined" ||
+    !process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim()
+  ) {
+    return false;
+  }
+
+  const cleanParams = sanitizeAnalyticsParams({
+    ...getCurrentAttribution(),
+    ...params,
+  });
+
+  if (typeof window.gtag === "function") {
+    window.gtag("event", eventName, cleanParams);
+    return true;
+  }
+
+  window.__logocutAnalyticsQueue = window.__logocutAnalyticsQueue ?? [];
+
+  if (window.__logocutAnalyticsQueue.length < 50) {
+    window.__logocutAnalyticsQueue.push({ eventName, params: cleanParams });
+    return true;
+  }
+
+  return false;
+}
+
+export function flushAnalyticsQueue() {
   if (typeof window === "undefined" || typeof window.gtag !== "function") {
     return;
   }
 
-  window.gtag("event", eventName, cleanParams(params));
+  const queue = window.__logocutAnalyticsQueue ?? [];
+  window.__logocutAnalyticsQueue = [];
+
+  for (const event of queue) {
+    window.gtag("event", event.eventName, event.params);
+  }
 }
 
 export function trackPurchaseOnce(params: {
   transactionId: string;
   value: number;
   cutType: CutType;
+  productType: OneTimeProductType;
 }) {
   if (typeof window === "undefined" || !params.transactionId) {
     return;
   }
 
   const storageKey = `logocut_purchase_${params.transactionId}`;
+  let wasPersisted = false;
 
-  if (window.localStorage.getItem(storageKey)) {
+  try {
+    wasPersisted = Boolean(window.localStorage.getItem(storageKey));
+  } catch {
+    wasPersisted = false;
+  }
+
+  if (purchaseMemory.has(params.transactionId) || wasPersisted) {
     return;
   }
 
-  window.localStorage.setItem(storageKey, "1");
+  const purchaseParams = createPurchaseAnalyticsParams(params);
 
-  trackEvent("purchase_completed", {
-    currency: "USD",
-    value: params.value,
-    cut_type: params.cutType,
-    transaction_id: params.transactionId,
-  });
-  trackEvent("purchase", {
-    currency: "USD",
-    value: params.value,
-    cut_type: params.cutType,
-    transaction_id: params.transactionId,
-  });
+  if (!trackEvent("purchase", purchaseParams)) {
+    return;
+  }
+
+  trackEvent("purchase_completed", purchaseParams);
+  purchaseMemory.add(params.transactionId);
+
+  try {
+    window.localStorage.setItem(storageKey, "1");
+  } catch {
+    // In-memory deduplication still protects the current page session.
+  }
 }

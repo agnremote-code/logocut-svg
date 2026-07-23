@@ -45,9 +45,20 @@ export function PayPalCheckout({
     if (window.paypal) setSdkReady(true);
     if (!viewedRef.current) {
       viewedRef.current = true;
-      trackEvent("checkout_viewed", { cut_type: cutType, source_page: "conversion_studio" });
+      trackEvent("checkout_viewed", {
+        cut_type: cutType,
+        product_type: productType,
+        source_page: "conversion_studio",
+        value:
+          productType === "complete_pack"
+            ? 12
+            : productType === "layered_svg"
+              ? 9
+              : 5,
+        currency: "USD",
+      });
     }
-  }, [cutType]);
+  }, [cutType, productType]);
 
   useEffect(() => {
     if (!sdkReady || !window.paypal || !containerRef.current || !jobId) return;

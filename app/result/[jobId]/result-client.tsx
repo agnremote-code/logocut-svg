@@ -55,6 +55,7 @@ export default function ResultClient({ jobId }: ResultClientProps) {
   const router = useRouter();
   const paypalButtonContainerRef = useRef<HTMLDivElement | null>(null);
   const resultViewTrackedRef = useRef(false);
+  const checkoutViewTrackedRef = useRef(false);
   const [job, setJob] = useState<ClientJobRecord | null>(null);
   const [serverJob, setServerJob] = useState<JobSummary | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -221,8 +222,9 @@ export default function ResultClient({ jobId }: ResultClientProps) {
       transactionId: purchaseDetails.transactionId,
       value: purchaseDetails.value,
       cutType: activeCutType,
+      productType,
     });
-  }, [activeCutType, paymentStatus, purchaseDetails]);
+  }, [activeCutType, paymentStatus, productType, purchaseDetails]);
 
   useEffect(() => {
     if (!job?.imageBlob) {
@@ -401,6 +403,37 @@ export default function ResultClient({ jobId }: ResultClientProps) {
     isSvgReady,
     jobId,
     paymentStatus,
+    productType,
+  ]);
+
+  useEffect(() => {
+    if (
+      checkoutViewTrackedRef.current ||
+      !previewAssetReady ||
+      isSvgReady ||
+      paymentStatus === "paid"
+    ) {
+      return;
+    }
+
+    checkoutViewTrackedRef.current = true;
+    trackEvent("checkout_viewed", {
+      cut_type: activeCutType,
+      product_type: productType,
+      source_page: "result_page",
+      value:
+        productType === "complete_pack"
+          ? 12
+          : productType === "layered_svg"
+            ? 9
+            : 5,
+      currency: "USD",
+    });
+  }, [
+    activeCutType,
+    isSvgReady,
+    paymentStatus,
+    previewAssetReady,
     productType,
   ]);
 

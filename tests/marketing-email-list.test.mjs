@@ -56,6 +56,22 @@ test("invalid email is rejected and duplicate signup updates safely", async () =
   assert.match(migration, /normalized_email text not null unique/);
 });
 
+test("marketing contacts require server-side elevated database access", async () => {
+  const migration = await source(
+    "../supabase/migrations/202607230001_create_marketing_contacts.sql",
+  );
+
+  assert.match(
+    migration,
+    /alter table public\.marketing_contacts enable row level security/,
+  );
+  assert.match(
+    migration,
+    /revoke all privileges on table public\.marketing_contacts\s+from anon, authenticated/,
+  );
+  assert.doesNotMatch(migration, /create\s+policy/i);
+});
+
 test("PayPal payer email does not create marketing consent", async () => {
   const paypal = await source("../lib/paypal.ts");
   const captureRoute = await source("../app/api/paypal/orders/[orderId]/capture/route.ts");

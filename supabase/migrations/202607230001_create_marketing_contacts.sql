@@ -17,6 +17,11 @@ create table if not exists public.marketing_contacts (
   constraint marketing_contacts_consent_source check (consent_source in ('preview_inline', 'post_purchase_result'))
 );
 
+alter table public.marketing_contacts enable row level security;
+
+revoke all privileges on table public.marketing_contacts
+  from anon, authenticated;
+
 create index if not exists marketing_contacts_consent_status_idx
   on public.marketing_contacts (consent_status);
 

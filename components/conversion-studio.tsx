@@ -17,6 +17,7 @@ import {
 import { trackEvent } from "@/lib/analytics";
 import { resolvePreviewAsset } from "@/lib/preview-asset";
 import { PayPalCheckout } from "@/components/paypal-checkout";
+import { MarketingSignupCard } from "@/components/marketing-signup-card";
 
 const samples = [
   ["northline", "Logo", "Northline Studio"],
@@ -631,6 +632,7 @@ export function ConversionStudio() {
               <li>Instant download after processing</li>
               <li>No subscription</li>
             </ul>
+            <MarketingSignupCard source="preview_inline" compact />
             <PayPalCheckout jobId={jobId} cutType={cut} productType={productType} />
             <button className="text-button" onClick={() => setState("file_selected")}>
               Adjust Settings

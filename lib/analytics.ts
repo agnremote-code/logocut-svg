@@ -27,7 +27,13 @@ type AnalyticsEventName =
   | "checkout_viewed"
   | "final_svg_generation_started"
   | "final_svg_ready"
-  | "purchase";
+  | "purchase"
+  | "marketing_capture_viewed"
+  | "marketing_email_submitted"
+  | "marketing_opt_in_completed"
+  | "marketing_signup_failed"
+  | "post_purchase_marketing_capture_viewed"
+  | "marketing_unsubscribed";
 
 type AnalyticsParams = {
   cut_type?: CutType;
@@ -47,6 +53,8 @@ type AnalyticsParams = {
   preview_failure_code?: string;
   background?: string;
   direction?: string;
+  consent_source?: string;
+  failure_reason?: string;
 };
 
 declare global {

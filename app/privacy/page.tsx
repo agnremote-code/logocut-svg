@@ -21,6 +21,11 @@ export default function PrivacyPage() {
             Uploaded files and generated SVGs are currently stored temporarily
             for processing. Do not upload confidential artwork.
           </p>
+          <p>
+            Joining the LogoCut email list is optional and requires explicit
+            consent. Marketing emails include an unsubscribe link, and PayPal
+            payer emails are not automatically added to the marketing list.
+          </p>
         </div>
       </section>
     </main>

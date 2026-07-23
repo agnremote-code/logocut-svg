@@ -17,6 +17,10 @@ import {
 } from "@/lib/job-types";
 import { ResultViewer } from "@/components/result-viewer";
 import { resolvePreviewAsset } from "@/lib/preview-asset";
+import {
+  MarketingSignupCard,
+  hasJoinedMarketingList,
+} from "@/components/marketing-signup-card";
 
 type ResultClientProps = {
   jobId: string;
@@ -74,6 +78,7 @@ export default function ResultClient({ jobId }: ResultClientProps) {
     value: number;
     currency: string;
   } | null>(null);
+  const [marketingJoined, setMarketingJoined] = useState(false);
   const [productType, setProductType] =
     useState<OneTimeProductType>("single_svg");
   const [finalOutputs, setFinalOutputs] = useState<{
@@ -264,6 +269,8 @@ export default function ResultClient({ jobId }: ResultClientProps) {
     if (window.paypal) {
       setIsPayPalScriptReady(true);
     }
+
+    setMarketingJoined(hasJoinedMarketingList());
   }, []);
 
   useEffect(() => {
@@ -678,6 +685,12 @@ export default function ResultClient({ jobId }: ResultClientProps) {
                   </p>
                 </div>
 
+                <MarketingSignupCard
+                  source="preview_inline"
+                  compact
+                  onJoined={() => setMarketingJoined(true)}
+                />
+
                 {paypalClientId ? (
                   <>
                     <Script
@@ -706,6 +719,14 @@ export default function ResultClient({ jobId }: ResultClientProps) {
                   </button>
                 )}
               </div>
+            ) : null}
+
+            {(isSvgReady || hasAnyCompleteOutput) && !marketingJoined ? (
+              <MarketingSignupCard
+                source="post_purchase_result"
+                compact
+                onJoined={() => setMarketingJoined(true)}
+              />
             ) : null}
 
             {isSvgReady ? (

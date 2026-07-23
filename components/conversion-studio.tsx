@@ -39,6 +39,38 @@ type PreviewAssetState =
   | "preview_asset_ready"
   | "preview_asset_error"
   | null;
+type PreviewFailureCode =
+  | "network_error"
+  | "missing_credentials"
+  | "vectorizer_error"
+  | "invalid_input"
+  | "unknown_error";
+
+const previewHelperCopy: Record<CutType, string> = {
+  single: "Colors are intentionally simplified for vinyl, decals and silhouette cuts.",
+  multi: "Colors are separated into layered shapes for multi-color projects.",
+};
+
+const previewFailureMessages: Record<PreviewFailureCode, string> = {
+  network_error: "The preview service could not be reached. Please retry.",
+  missing_credentials: "Preview service is temporarily unavailable.",
+  vectorizer_error: "We couldn’t generate this preview right now. Please retry.",
+  invalid_input: "This image could not be processed. Try another PNG or JPG.",
+  unknown_error: "We couldn’t generate this preview right now. Please retry.",
+};
+
+function isPreviewFailureCode(value: unknown): value is PreviewFailureCode {
+  return (
+    value === "network_error" ||
+    value === "missing_credentials" ||
+    value === "vectorizer_error" ||
+    value === "invalid_input"
+  );
+}
+
+function getPreviewFailureMessage(code: PreviewFailureCode) {
+  return previewFailureMessages[code] ?? previewFailureMessages.unknown_error;
+}
 
 function SelectedFilePlaceholder({ original, title }: { original: string; title: string }) {
   return (
@@ -93,6 +125,42 @@ function PreviewDisplayError({ onRetry, onChoose }: { onRetry: () => void; onCho
   );
 }
 
+function PreviewGenerationError({
+  original,
+  title,
+  message,
+  onRetry,
+  onChoose,
+}: {
+  original: string;
+  title: string;
+  message: string;
+  onRetry: () => void;
+  onChoose: () => void;
+}) {
+  return (
+    <div className="preview-generation-error" role="alert">
+      <figure>
+        <span>Your original</span>
+        <img src={original} alt={`Uploaded image: ${title}`} />
+      </figure>
+      <div>
+        <span aria-hidden="true">!</span>
+        <h3>Preview failed</h3>
+        <p>{message}</p>
+        <div>
+          <button className="primary-button" onClick={onRetry}>
+            Retry Preview
+          </button>
+          <button className="secondary-button" onClick={onChoose}>
+            Choose Another Image
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ConversionStudio() {
   const input = useRef<HTMLInputElement>(null);
   const studio = useRef<HTMLElement>(null);
@@ -108,6 +176,8 @@ export function ConversionStudio() {
   const [productType, setProductType] = useState<OneTimeProductType>("single_svg");
   const [previewCut, setPreviewCut] = useState<CutType | null>(null);
   const [error, setError] = useState("");
+  const [previewFailureCode, setPreviewFailureCode] =
+    useState<PreviewFailureCode | null>(null);
   const [jobId, setJobId] = useState("");
   const [drag, setDrag] = useState(false);
 
@@ -148,6 +218,7 @@ export function ConversionStudio() {
     setPreviewReference(null);
     setPreviewAssetState(null);
     setPreviewCut(null);
+    setPreviewFailureCode(null);
     setJobId("");
   };
 
@@ -202,6 +273,14 @@ export function ConversionStudio() {
     if (nextFile) acceptFile(nextFile);
   };
 
+  const resetStalePreviewAfterModeChange = () => {
+    if (state === "preview_ready" || state === "paid_result") {
+      clearRealPreview();
+      setError("Settings changed. Generate a new preview to update the SVG.");
+      setState("file_selected");
+    }
+  };
+
   const changeCut = (nextCut: CutType) => {
     if (nextCut === cut) return;
     setCut(nextCut);
@@ -211,11 +290,26 @@ export function ConversionStudio() {
         : getDefaultProductTypeForOutput(nextCut),
     );
     trackEvent("conversion_setting_changed", { setting: "output_type", value: nextCut });
+    trackEvent("preview_view_mode_changed", {
+      preview_mode: nextCut,
+      product_type: productType,
+      source_page: "homepage_studio",
+    });
 
-    if (state === "preview_ready" || state === "paid_result") {
-      clearRealPreview();
-      setError("Settings changed. Generate a new preview to update the SVG.");
-      setState("file_selected");
+    resetStalePreviewAfterModeChange();
+  };
+
+  const selectProductType = (nextProductType: OneTimeProductType) => {
+    setProductType(nextProductType);
+
+    if (nextProductType === "complete_pack" && cut !== "multi") {
+      setCut("multi");
+      trackEvent("preview_view_mode_changed", {
+        preview_mode: "multi",
+        product_type: "complete_pack",
+        source_page: "homepage_studio",
+      });
+      resetStalePreviewAfterModeChange();
     }
   };
 
@@ -225,7 +319,7 @@ export function ConversionStudio() {
       ? "complete_pack"
       : getDefaultProductTypeForOutput(cut);
 
-    setProductType(nextProductType);
+    selectProductType(nextProductType);
     trackEvent("conversion_setting_changed", {
       setting: "product_type",
       value: nextProductType,
@@ -244,9 +338,11 @@ export function ConversionStudio() {
     clearRealPreview();
     setState("preview_generating");
     setError("");
+    setPreviewFailureCode(null);
     trackEvent("preview_requested", {
       source_page: "homepage_studio",
       cut_type: cut,
+      preview_mode: cut,
       file_type: file.type,
     });
 
@@ -255,9 +351,17 @@ export function ConversionStudio() {
       form.append("image", file);
       form.append("cutType", cut);
       const createResponse = await fetch("/api/jobs", { method: "POST", body: form });
-      const createPayload = (await createResponse.json()) as { job?: JobSummary; error?: string };
+      const createPayload = (await createResponse.json()) as {
+        job?: JobSummary;
+        error?: string;
+        code?: unknown;
+      };
       if (!createResponse.ok || !createPayload.job) {
-        throw new Error(createPayload.error ?? "Could not start preview.");
+        throw {
+          code: isPreviewFailureCode(createPayload.code)
+            ? createPayload.code
+            : "unknown_error",
+        };
       }
 
       await saveClientJob({ ...createPayload.job, imageBlob: file }).catch(() => undefined);
@@ -266,6 +370,8 @@ export function ConversionStudio() {
       });
       const previewPayload = (await previewResponse.json()) as {
         error?: string;
+        code?: unknown;
+        detail?: string;
         previewAsset?: {
           reference?: string;
           contentType?: string;
@@ -273,7 +379,11 @@ export function ConversionStudio() {
         } | null;
       };
       if (!previewResponse.ok) {
-        throw new Error(previewPayload.error ?? "We couldn't create this preview.");
+        throw {
+          code: isPreviewFailureCode(previewPayload.code)
+            ? previewPayload.code
+            : "unknown_error",
+        };
       }
 
       setJobId(createPayload.job.id);
@@ -290,14 +400,27 @@ export function ConversionStudio() {
       trackEvent("preview_generated", {
         source_page: "homepage_studio",
         cut_type: cut,
+        preview_mode: cut,
         file_type: file.type,
       });
     } catch (previewError) {
+      const failureCode =
+        typeof previewError === "object" &&
+        previewError !== null &&
+        "code" in previewError &&
+        isPreviewFailureCode(previewError.code)
+          ? previewError.code
+          : "unknown_error";
       clearRealPreview();
-      setError(
-        previewError instanceof Error ? previewError.message : "We couldn't create this preview.",
-      );
+      setPreviewFailureCode(failureCode);
+      setError(getPreviewFailureMessage(failureCode));
       setState("preview_error");
+      trackEvent("preview_failed", {
+        source_page: "homepage_studio",
+        cut_type: cut,
+        preview_mode: cut,
+        preview_failure_code: failureCode,
+      });
     }
   };
 
@@ -322,10 +445,24 @@ export function ConversionStudio() {
 
   const markPreviewFailed = () => {
     setPreviewAssetState("preview_asset_error");
+    setPreviewFailureCode("vectorizer_error");
+    setError(getPreviewFailureMessage("vectorizer_error"));
     setState("preview_error");
+    trackEvent("preview_failed", {
+      source_page: "homepage_studio",
+      cut_type: cut,
+      preview_mode: cut,
+      preview_failure_code: "vectorizer_error",
+    });
   };
 
   const retryPreview = async () => {
+    trackEvent("preview_retry_clicked", {
+      source_page: "homepage_studio",
+      cut_type: cut,
+      preview_mode: cut,
+      preview_failure_code: previewFailureCode ?? undefined,
+    });
     if (previewReference) {
       const recovered = await loadPreviewAsset(previewReference);
       if (recovered) return;
@@ -445,6 +582,7 @@ export function ConversionStudio() {
             >
               Layered Preview
             </button>
+            <p>{previewHelperCopy[cut]}</p>
           </div>
         ) : null}
         {hasMatchingPreview ? (
@@ -462,7 +600,7 @@ export function ConversionStudio() {
                   key={option.id}
                   className={productType === option.id ? "active" : ""}
                   onClick={() => {
-                    setProductType(option.id);
+                    selectProductType(option.id);
                     trackEvent("conversion_setting_changed", {
                       setting: "product_type",
                       value: option.id,
@@ -530,10 +668,10 @@ export function ConversionStudio() {
             original={userOriginalUrl}
             result={userPreviewUrl}
             originalLabel="Your original"
-            resultLabel="Free SVG Preview"
-            resultAlt="Free SVG preview"
-            badge="Free SVG Preview"
-            title={`${file.name} · ${cut === "single" ? "Single-Color SVG" : "Layered SVG"}`}
+            resultLabel={cut === "single" ? "Single-Color Preview" : "Layered Preview"}
+            resultAlt={cut === "single" ? "Single-color SVG preview" : "Layered SVG preview"}
+            badge={cut === "single" ? "Single-Color Preview" : "Layered Preview"}
+            title={`${file.name} · ${cut === "single" ? "Single-Color Preview" : "Layered Preview"}`}
             controlsEnabled={hasMatchingPreview}
             onResultLoad={markPreviewLoaded}
             onResultError={markPreviewFailed}
@@ -543,7 +681,13 @@ export function ConversionStudio() {
           <PreviewDisplayError onRetry={retryPreview} onChoose={() => input.current?.click()} />
         ) : null}
         {state === "preview_error" && previewAssetState !== "preview_asset_error" && userOriginalUrl && file ? (
-          <SelectedFilePlaceholder original={userOriginalUrl} title={file.name} />
+          <PreviewGenerationError
+            original={userOriginalUrl}
+            title={file.name}
+            message={error || getPreviewFailureMessage(previewFailureCode ?? "unknown_error")}
+            onRetry={retryPreview}
+            onChoose={() => input.current?.click()}
+          />
         ) : null}
         {state === "demo" ? (
           <div className="sample-selector" aria-label="Example conversions">

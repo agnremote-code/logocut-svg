@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { resolveAppUrl } from "../lib/app-url.ts";
 
 async function source(path) {
   return readFile(new URL(path, import.meta.url), "utf8");
@@ -122,4 +123,52 @@ test("Email List MVP environment variables are documented", async () => {
     assert.match(envExample, new RegExp(name));
     assert.match(readme, new RegExp(name));
   }
+});
+
+test("email link URL resolution uses the trusted server-side precedence", () => {
+  assert.equal(
+    resolveAppUrl({
+      NEXT_PUBLIC_APP_URL: "https://configured.example.com/",
+      VERCEL_ENV: "preview",
+      VERCEL_BRANCH_URL: "branch.example.vercel.app",
+      VERCEL_URL: "deployment.example.vercel.app",
+    }),
+    "https://configured.example.com",
+  );
+
+  assert.equal(
+    resolveAppUrl({
+      VERCEL_ENV: "preview",
+      VERCEL_BRANCH_URL: "branch.example.vercel.app",
+      VERCEL_URL: "deployment.example.vercel.app",
+    }),
+    "https://branch.example.vercel.app",
+  );
+
+  assert.equal(
+    resolveAppUrl({
+      VERCEL_ENV: "production",
+      VERCEL_BRANCH_URL: "branch.example.vercel.app",
+      VERCEL_URL: "production.example.vercel.app",
+    }),
+    "https://production.example.vercel.app",
+  );
+
+  assert.equal(
+    resolveAppUrl({
+      VERCEL_ENV: "preview",
+      VERCEL_URL: "deployment.example.vercel.app",
+    }),
+    "https://deployment.example.vercel.app",
+  );
+
+  assert.equal(resolveAppUrl({}), "http://localhost:3000");
+});
+
+test("email link origin does not use request Host headers", async () => {
+  const appUrl = await source("../lib/app-url.ts");
+  const marketing = await source("../lib/marketing.ts");
+
+  assert.doesNotMatch(appUrl, /request\.headers|headers\(\)|x-forwarded-host/i);
+  assert.match(marketing, /resolveAppUrl\(\)/);
 });

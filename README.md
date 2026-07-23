@@ -70,7 +70,8 @@ SUPABASE_SERVICE_ROLE_KEY="your-supabase-service-role-key"
 RESEND_API_KEY="re_your-resend-api-key"
 MARKETING_TOKEN_SECRET="replace-with-a-random-32-byte-secret"
 
-NEXT_PUBLIC_APP_URL="http://localhost:3000"
+# Optional explicit override. Vercel Preview automatically uses its branch URL.
+NEXT_PUBLIC_APP_URL="https://www.logocutsvg.com"
 
 # Optional for local durable Blob testing.
 BLOB_READ_WRITE_TOKEN="vercel-blob-read-write-token"
@@ -88,6 +89,7 @@ Notes:
 - `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are server-only values for the optional marketing email list. Do not expose the service role key to the browser.
 - `RESEND_API_KEY` and `EMAIL_FROM` send the optional signup confirmation email.
 - `MARKETING_TOKEN_SECRET` signs purpose-bound unsubscribe links. Email addresses are not placed directly in unsubscribe URLs.
+- Confirmation and unsubscribe links use `NEXT_PUBLIC_APP_URL` when explicitly configured. Otherwise, Vercel Preview uses `VERCEL_BRANCH_URL`, then `VERCEL_URL`; local development uses `http://localhost:3000`.
 - Vercel Blob stores uploaded images, generated SVG files, and job metadata JSON.
 - For local durable Blob testing, use `BLOB_READ_WRITE_TOKEN`.
 - In Vercel, a connected Blob store can provide `BLOB_STORE_ID` through system environment variables and the Blob SDK uses Vercel OIDC automatically; `BLOB_READ_WRITE_TOKEN` is optional in that setup.

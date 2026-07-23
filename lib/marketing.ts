@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { resolveAppUrl } from "@/lib/app-url";
 
 export type MarketingConsentSource =
   | "preview_inline"
@@ -30,13 +31,6 @@ function base64UrlEncode(value: string | Buffer) {
 
 function base64UrlDecode(value: string) {
   return Buffer.from(value, "base64url").toString("utf8");
-}
-
-function getAppUrl() {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "") ||
-    "http://localhost:3000"
-  );
 }
 
 function getMarketingTokenSecret() {
@@ -297,7 +291,7 @@ export async function sendMarketingConfirmationEmail(input: {
     return { sent: false, reason: "token_not_configured" as const };
   }
 
-  const unsubscribeUrl = `${getAppUrl()}/unsubscribe/${encodeURIComponent(
+  const unsubscribeUrl = `${resolveAppUrl()}/unsubscribe/${encodeURIComponent(
     unsubscribeToken,
   )}`;
   const response = await fetch("https://api.resend.com/emails", {

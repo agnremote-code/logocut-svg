@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { resolveAppUrl } from "../lib/app-url.ts";
+import {
+  createUnsubscribeToken,
+  verifyUnsubscribeToken,
+} from "../lib/marketing-token.ts";
 
 async function source(path) {
   return readFile(new URL(path, import.meta.url), "utf8");
@@ -92,25 +96,67 @@ test("Resend failure does not fail successful signup response or checkout", asyn
   assert.match(route, /return NextResponse\.json\(\{\s*ok: true/);
 });
 
-test("unsubscribe uses a purpose-bound signed token and safe success page", async () => {
+test("unsubscribe tokens are signed, expiring, and bound to one contact", () => {
+  const secret = "test-only-marketing-secret";
+  const now = Date.UTC(2026, 6, 23);
+  const contactId = "contact-a";
+  const token = createUnsubscribeToken(contactId, now, secret);
+  const valid = verifyUnsubscribeToken(token, now, secret);
+
+  assert.deepEqual(valid, { ok: true, contactId });
+
+  const lastCharacter = token.at(-1);
+  const modifiedToken = `${token.slice(0, -1)}${lastCharacter === "a" ? "b" : "a"}`;
+
+  assert.equal(
+    verifyUnsubscribeToken(modifiedToken, now, secret).ok,
+    false,
+  );
+  assert.equal(
+    verifyUnsubscribeToken(token, now + 31 * 24 * 60 * 60 * 1000, secret).ok,
+    false,
+  );
+  assert.notEqual(valid.ok && valid.contactId, "contact-b");
+});
+
+test("unsubscribe token stays in the fragment and is posted to a fixed endpoint", async () => {
   const marketing = await source("../lib/marketing.ts");
-  const page = await source("../app/unsubscribe/[token]/page.tsx");
+  const token = await source("../lib/marketing-token.ts");
+  const page = await source("../app/unsubscribe/page.tsx");
+  const route = await source("../app/api/marketing/unsubscribe/route.ts");
   const tracker = await source("../components/unsubscribe-tracker.tsx");
 
-  assert.match(marketing, /UNSUBSCRIBE_PURPOSE = "marketing_unsubscribe"/);
-  assert.match(marketing, /createHmac\("sha256"/);
-  assert.match(marketing, /timingSafeEqual/);
-  assert.match(marketing, /This unsubscribe link is invalid\./);
-  assert.match(marketing, /This unsubscribe link has expired\./);
-  assert.match(marketing, /unsubscribeMarketingContact/);
-  assert.match(page, /verifyUnsubscribeToken/);
+  assert.match(token, /UNSUBSCRIBE_PURPOSE = "marketing_unsubscribe"/);
+  assert.match(token, /createHmac\("sha256"/);
+  assert.match(token, /timingSafeEqual/);
+  assert.match(marketing, /\/unsubscribe#token=\$\{encodeURIComponent/);
+  assert.doesNotMatch(marketing, /\/unsubscribe\/\$\{/);
+  assert.doesNotMatch(marketing, /\/unsubscribe\?token=/);
+  assert.match(page, /window\.location\.hash/);
+  assert.match(page, /window\.history\.replaceState\(null, "", "\/unsubscribe"\)/);
+  assert.match(page, /fetch\("\/api\/marketing\/unsubscribe"/);
+  assert.match(page, /body: JSON\.stringify\(\{ token \}\)/);
+  assert.match(route, /contentType !== "application\/json"/);
+  assert.match(route, /verifyUnsubscribeToken\(payload\.token\)/);
+  assert.match(route, /unsubscribeMarketingContact\(verified\.contactId\)/);
+  assert.match(route, /"Cache-Control": "no-store, max-age=0"/);
   assert.match(page, /Unsubscribed/);
   assert.match(tracker, /marketing_unsubscribed/);
+});
+
+test("old token-in-path unsubscribe route no longer exists", async () => {
+  await assert.rejects(
+    access(new URL("../app/unsubscribe/[token]/page.tsx", import.meta.url)),
+    (error) => error?.code === "ENOENT",
+  );
 });
 
 test("marketing analytics never include email, hashes, provider text or tokens", async () => {
   const card = await source("../components/marketing-signup-card.tsx");
   const tracker = await source("../components/unsubscribe-tracker.tsx");
+  const unsubscribeRoute = await source(
+    "../app/api/marketing/unsubscribe/route.ts",
+  );
 
   for (const file of [card, tracker]) {
     const analyticsSource = (file.match(/trackEvent\([\s\S]*?\);/g) ?? []).join("\n");
@@ -122,6 +168,12 @@ test("marketing analytics never include email, hashes, provider text or tokens",
     assert.doesNotMatch(analyticsSource, /provider/i);
     assert.doesNotMatch(analyticsSource, /PayPal/i);
   }
+
+  const unsubscribeLogs = (
+    unsubscribeRoute.match(/console\.(?:error|info|log)\([\s\S]*?\);/g) ?? []
+  ).join("\n");
+
+  assert.doesNotMatch(unsubscribeLogs, /token|payload|request body/i);
 });
 
 test("Email List MVP environment variables are documented", async () => {

@@ -12,38 +12,43 @@ export function AnalyticsProvider() {
     const flush = () => flushAnalyticsQueue();
 
     getCurrentAttribution();
+
+    if (measurementId) {
+      window.dataLayer = window.dataLayer ?? [];
+      window.gtag =
+        window.gtag ??
+        ((...args: unknown[]) => {
+          window.dataLayer?.push(args);
+        });
+
+      if (window.__logocutGaConfigured !== measurementId) {
+        window.gtag("js", new Date());
+        window.gtag("config", measurementId, {
+          send_page_view: false,
+          allow_google_signals: false,
+          allow_ad_personalization_signals: false,
+        });
+        window.__logocutGaConfigured = measurementId;
+      }
+    }
+
     flush();
     window.addEventListener("logocut:analytics-ready", flush);
 
     return () => window.removeEventListener("logocut:analytics-ready", flush);
-  }, []);
+  }, [measurementId]);
 
   if (!measurementId) {
     return null;
   }
 
   return (
-    <>
-      <Script
-        src={`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(
-          measurementId,
-        )}`}
-        strategy="afterInteractive"
-      />
-      <Script id="ga4" strategy="afterInteractive">
-        {`
-          window.dataLayer = window.dataLayer || [];
-          function gtag(){dataLayer.push(arguments);}
-          window.gtag = gtag;
-          gtag('js', new Date());
-          gtag('config', '${measurementId}', {
-            send_page_view: false,
-            allow_google_signals: false,
-            allow_ad_personalization_signals: false
-          });
-          window.dispatchEvent(new Event('logocut:analytics-ready'));
-        `}
-      </Script>
-    </>
+    <Script
+      src={`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(
+        measurementId,
+      )}`}
+      strategy="afterInteractive"
+      onLoad={() => window.dispatchEvent(new Event("logocut:analytics-ready"))}
+    />
   );
 }

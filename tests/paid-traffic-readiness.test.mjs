@@ -188,6 +188,8 @@ test("GA4 is documented and disabled safely until a measurement ID exists", asyn
 
   assert.match(provider, /NEXT_PUBLIC_GA_MEASUREMENT_ID/);
   assert.match(provider, /getCurrentAttribution\(\)/);
+  assert.match(provider, /window\.dataLayer = window\.dataLayer \?\? \[\]/);
+  assert.match(provider, /window\.__logocutGaConfigured !== measurementId/);
   assert.match(provider, /send_page_view: false/);
   assert.match(provider, /allow_google_signals: false/);
   assert.match(provider, /allow_ad_personalization_signals: false/);

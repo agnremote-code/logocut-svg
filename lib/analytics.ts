@@ -74,11 +74,9 @@ type AnalyticsItem = {
 
 declare global {
   interface Window {
-    gtag?: (
-      command: "event",
-      eventName: string,
-      params?: Record<string, unknown>,
-    ) => void;
+    dataLayer?: unknown[][];
+    gtag?: (...args: unknown[]) => void;
+    __logocutGaConfigured?: string;
     __logocutAnalyticsQueue?: Array<{
       eventName: AnalyticsEventName;
       params: Record<string, unknown>;

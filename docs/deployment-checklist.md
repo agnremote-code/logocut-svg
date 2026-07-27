@@ -14,6 +14,7 @@ Use this checklist before deploying LogoCut SVG to Vercel.
 Add these in Vercel Project Settings -> Environment Variables:
 
 ```bash
+NEXT_PUBLIC_GA_MEASUREMENT_ID
 VECTORIZER_API_ID
 VECTORIZER_API_SECRET
 NEXT_PUBLIC_PAYPAL_CLIENT_ID

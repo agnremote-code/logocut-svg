@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { trackEvent } from "@/lib/analytics";
+import { getCurrentAttribution } from "@/lib/attribution";
 
 type MarketingSignupSource = "preview_inline" | "post_purchase_result";
 
@@ -19,11 +20,12 @@ function getUtmAttribution() {
     return {};
   }
 
-  const params = new URLSearchParams(window.location.search);
+  const attribution = getCurrentAttribution();
+
   return {
-    source: params.get("utm_source") ?? undefined,
-    medium: params.get("utm_medium") ?? undefined,
-    campaign: params.get("utm_campaign") ?? undefined,
+    source: attribution.utm_source,
+    medium: attribution.utm_medium,
+    campaign: attribution.utm_campaign,
   };
 }
 

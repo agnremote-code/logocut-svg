@@ -18,7 +18,7 @@ const faqs=[
 ];
 const start=()=>openUploader("lower_page_cta");
 
-export function HomePage(){useEffect(()=>trackEvent("homepage_view",{source_page:"homepage"}),[]);return <main className="premium-page">
+export function HomePage(){useEffect(()=>{trackEvent("homepage_view",{source_page:"homepage"});},[]);return <main className="premium-page">
  <nav className="premium-nav"><Link href="/" className="brand"><span>LC</span>LogoCut</Link><div className="nav-links"><a href="#how">How it works</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a></div><button className="nav-cta" onClick={start}>Try it free</button></nav>
  <header className="premium-hero"><p className="hero-pill">IMAGE TO SVG, WITHOUT THE GUESSWORK</p><h1>Convert Any Image Into a Clean, Cut-Ready SVG</h1><p>Upload a PNG or JPG, preview the result for free, and pay only when it looks right.</p><span>No account · No subscription · Single-color $5 · Layered $9 · Both for $12</span></header>
  <div className="studio-wrap"><ConversionStudio/></div>

@@ -44,6 +44,7 @@ Fill in the required values in `.env.local`.
 ## Environment Variables
 
 ```bash
+NEXT_PUBLIC_GA_MEASUREMENT_ID="G-XXXXXXXXXX"
 VECTORIZER_API_ID="your-api-id"
 VECTORIZER_API_SECRET="your-api-secret"
 

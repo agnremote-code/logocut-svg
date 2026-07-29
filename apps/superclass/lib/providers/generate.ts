@@ -65,6 +65,7 @@ function normalizeLesson(input: LessonDraft, request: LessonRequest, requestId: 
     duration: request.duration,
     visualStyle: request.visualStyle,
     sourceMode: request.sourceMode,
+    profileId: request.profileId || undefined,
     createdAt: new Date().toISOString(),
     screens: input.screens.map((screen) => ({
       ...screen,

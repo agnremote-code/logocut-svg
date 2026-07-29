@@ -1,8 +1,7 @@
 import type { LessonProvider } from "@/lib/providers/types";
+import { normalizeActivityTiming, targetScreenCount } from "@/lib/lesson/duration";
 import { extractYouTubeId } from "@/lib/validation/lesson";
 import type { LessonDraft, LessonRequest, LessonScreen, ScreenType, VocabularyItem } from "@/types/lesson";
-
-const screenTargets = { 30: 9, 45: 13, 60: 18, 90: 26 } as const;
 
 const levelGuidance = {
   A0: {
@@ -75,12 +74,14 @@ function clean(value: string, limit = 90) {
 function topicFrom(request: LessonRequest) {
   const material = request.sourceMode === "video" ? request.transcript : request.source;
   const first = material.split(/[.\n!?]/)[0] ?? "A practical language lesson";
-  return clean(
+  const topic = clean(
     first
       .replace(/^(a|an)\s+[A-C][0-2]\s+/i, "")
       .replace(/^(?:a|an)?\s*(?:(?:practical|conversation|language|travel)\s+)*(?:class|lesson)\s+(?:about|on)\s+/i, ""),
     84,
   );
+  const repeated = request.recentTopics.some((item) => item.toLowerCase().includes(topic.toLowerCase()));
+  return repeated && request.continueOrCorrect ? `${topic}: ${clean(request.continueOrCorrect, 48)}` : topic;
 }
 
 function contextKey(request: LessonRequest, topic: string) {
@@ -93,8 +94,11 @@ function contextKey(request: LessonRequest, topic: string) {
   return "default";
 }
 
-function vocabulary(topic: string, key: string): VocabularyItem[] {
-  return (vocabularyByContext[key] ?? vocabularyByContext.default).slice(0, 6).map((term, index) => ({
+function vocabulary(topic: string, key: string, recent: string[] = []): VocabularyItem[] {
+  const blocked = new Set(recent.map((item) => item.toLowerCase()));
+  const source = vocabularyByContext[key] ?? vocabularyByContext.default;
+  const ordered = [...source.filter((item) => !blocked.has(item.toLowerCase())), ...source.filter((item) => blocked.has(item.toLowerCase()))];
+  return ordered.slice(0, 6).map((term, index) => ({
     term,
     meaning: `Useful language for idea ${index + 1} in this ${key === "default" ? "topic" : key} context.`,
     example: clean(`Use "${term}" to make a natural point about ${topic}.`, 120),
@@ -137,7 +141,7 @@ function profileSummary(request: LessonRequest) {
 function buildScreens(request: LessonRequest, topic: string) {
   const guidance = levelGuidance[request.level];
   const key = contextKey(request, topic);
-  const vocab = vocabulary(topic, key);
+  const vocab = vocabulary(topic, key, request.recentVocabulary);
   const sourceText = request.sourceMode === "video" ? request.transcript : request.source;
   const sourceExcerpt = request.sourceMode === "idea" ? undefined : sourceText.slice(0, 320);
   const screens: LessonScreen[] = [];
@@ -162,7 +166,7 @@ function buildScreens(request: LessonRequest, topic: string) {
         ? [`I know __ about ${topic}.`, `I like __ because __.`, `For me, ${topic} is __.`]
         : [`What is your first association with ${topic}?`, `When has this topic affected you personally?`, `What would you like to express more clearly today?`],
     teacherNotes: [guidance.support, request.difficulties ? `Listen for: ${request.difficulties}.` : "Collect one useful correction for later."],
-    timing: 5,
+    timing: request.includeSmallTalk ? 12 : 5,
   });
   add("context", key === "work" ? "The real workplace situation" : key === "travel" ? "The situation on the ground" : "A real-life situation", "Notice who is speaking, what they need and what could go wrong.", {
     body: clean(`Imagine a realistic ${request.studentType === "group" ? "group" : "one-to-one"} situation involving ${topic}. The speaker must choose clear, level-appropriate language and respond naturally.`, 300),
@@ -204,7 +208,7 @@ function buildScreens(request: LessonRequest, topic: string) {
     timing: 6,
   });
 
-  if (request.skillsFocus.includes("pronunciation") || request.lessonFocus === "pronunciation-focused" || request.level === "A0") {
+  if (request.includePronunciation || request.skillsFocus.includes("pronunciation") || request.lessonFocus === "pronunciation-focused" || request.level === "A0") {
     const pronunciationTarget = /rolled r|vowel|pronunciation/i.test(request.difficulties)
       ? clean(request.difficulties, 70)
       : request.dialect === "rioplatense"
@@ -244,12 +248,14 @@ function buildScreens(request: LessonRequest, topic: string) {
     teacherNotes: [guidance.support],
     timing: 6,
   });
-  add("error-correction", "Repair the message", "Choose the best correction and explain what changed.", {
-    prompts: [`Correct: “I am agree about ${topic}.”`, `Improve: “It is good.”`, `Reformulate one sentence from your first answer.`],
-    answers: [`“I agree about…” or “I agree that…”`, `Replace “good” with a precise idea and reason.`],
-    teacherNotes: ["Use errors typical of the selected level; do not invent errors attributed to a real student."],
-    timing: 4,
-  });
+  if (request.includeCorrection) {
+    add("error-correction", "Repair the message", "Choose the best correction and explain what changed.", {
+      prompts: [`Correct: “I am agree about ${topic}.”`, `Improve: “It is good.”`, `Reformulate one sentence from your first answer.`],
+      answers: [`“I agree about…” or “I agree that…”`, `Replace “good” with a precise idea and reason.`],
+      teacherNotes: ["Use errors typical of the selected level; do not invent errors attributed to a real student."],
+      timing: 4,
+    });
+  }
   add("personal-questions", "Make the language personal", guidance.promptLead, {
     prompts: [`How does ${topic} connect to your own life?`, `What has changed your view of it?`, `What would you do differently next time?`],
     teacherNotes: [request.interests ? `Connect follow-up questions naturally to ${request.interests}.` : guidance.support],
@@ -302,7 +308,7 @@ function buildScreens(request: LessonRequest, topic: string) {
     });
   }
 
-  const target = screenTargets[request.duration];
+  const target = targetScreenCount(request.duration);
   const protectedTypes: ScreenType[] = ["cover", "objective", "warmup", "vocabulary", "discussion", "debate", "review", "exit-task"];
   while (screens.length > target - 1) {
     const removable = screens.findIndex((item, index) => index > 2 && !protectedTypes.includes(item.type));
@@ -333,7 +339,7 @@ function buildScreens(request: LessonRequest, topic: string) {
     timing: 1,
   });
 
-  return screens;
+  return normalizeActivityTiming(screens, request.duration);
 }
 
 export const deterministicProvider: LessonProvider<LessonDraft> = {
@@ -364,6 +370,7 @@ export const deterministicProvider: LessonProvider<LessonDraft> = {
       createdAt: new Date(0).toISOString(),
       suggestedNextLesson: `Build on today’s corrections with a new real-life situation connected to ${topic}.`,
       levelSignals: [...guidance.signals],
+      profileId: request.profileId || undefined,
     } satisfies LessonDraft;
   },
   async regenerateScreen(lesson, screenId) {

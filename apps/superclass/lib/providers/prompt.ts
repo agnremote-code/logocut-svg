@@ -1,18 +1,13 @@
+import { lessonScreenRange } from "@/lib/lesson/duration";
 import type { LessonRequest } from "@/types/lesson";
-
-const screenRanges = {
-  30: "8–12",
-  45: "12–17",
-  60: "16–24",
-  90: "24–36",
-} as const;
 
 export function buildLessonPrompt(request: LessonRequest) {
   const activeSource = request.sourceMode === "video" ? request.transcript : request.source;
+  const [minimumScreens, maximumScreens] = lessonScreenRange(request.duration);
   return [
     "Create a complete, classroom-ready language lesson as JSON matching the supplied schema.",
     "Hard requirements:",
-    `- Produce ${screenRanges[request.duration]} screens for a ${request.duration}-minute lesson.`,
+    `- Produce ${minimumScreens}-${maximumScreens} screens for a ${request.duration}-minute lesson and make activity timing total approximately ${request.duration} minutes.`,
     `- Apply ${request.level} CEFR pedagogy and name at least three concrete level signals.`,
     "- Keep instructions concise, usable on a projected slide, and appropriate for the learner level.",
     "- Include private teacher notes and answer evidence wherever a question has a supported answer.",
@@ -44,6 +39,13 @@ export function buildLessonPrompt(request: LessonRequest) {
       visualStyle: request.visualStyle,
       includeHomework: request.includeHomework,
       includeRoleplay: request.includeRoleplay,
+      includeSmallTalk: request.includeSmallTalk,
+      includeCorrection: request.includeCorrection,
+      includePronunciation: request.includePronunciation,
+      lastClassCovered: request.lastClassCovered,
+      continueOrCorrect: request.continueOrCorrect,
+      avoidRecentTopics: request.recentTopics,
+      avoidRecentVocabulary: request.recentVocabulary,
     }),
   ].join("\n");
 }

@@ -4,10 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { LessonBuilder } from "@/components/LessonBuilder";
 import { LessonWorkspace } from "@/components/LessonWorkspace";
 import { MarketingSections } from "@/components/MarketingSections";
+import { PlatformCompatibility, platformDisclaimer } from "@/components/PlatformCompatibility";
+import { StudentProfiles } from "@/components/StudentProfiles";
 import { track } from "@/lib/analytics";
 import { demoPresets } from "@/lib/presets";
 import { createBrowserDraftStore, LATEST_DRAFT_KEY } from "@/lib/storage/drafts";
-import { defaultLessonRequest, type LessonDraft, type LessonRequest } from "@/types/lesson";
+import { associateLessonWithProfile, createProfileStore, deleteAllLocalTeachingData } from "@/lib/storage/profiles";
+import { defaultLessonRequest, type LessonDraft, type LessonRequest, type StudentProfile } from "@/types/lesson";
 
 export function LessonApp() {
   const [request, setRequest] = useState<LessonRequest>(defaultLessonRequest);
@@ -16,6 +19,7 @@ export function LessonApp() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [profiles, setProfiles] = useState<StudentProfile[]>([]);
   const viewed = useRef(false);
 
   useEffect(() => {
@@ -25,6 +29,7 @@ export function LessonApp() {
     if (latest) setLesson(latest);
     else if (storedValue) setError("A saved draft uses an older format and could not be restored. Start a new lesson to replace it.");
     setRecent(store.list());
+    setProfiles(createProfileStore(window.localStorage).list());
     track("homepage_view");
   }, []);
 
@@ -42,24 +47,31 @@ export function LessonApp() {
   const scrollToBuilder = () => document.getElementById("builder")?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   async function generate(nextRequest = request) {
+    const selectedProfile = profiles.find((profile) => profile.id === nextRequest.profileId);
+    const preparedRequest = selectedProfile ? { ...nextRequest, recentTopics: selectedProfile.topicsUsed, recentVocabulary: selectedProfile.vocabularyStudied } : nextRequest;
     setLoading(true);
     setError("");
     track("lesson_generation_started", {
-      level: nextRequest.level,
-      duration: nextRequest.duration,
-      sourceMode: nextRequest.sourceMode,
-      visualStyle: nextRequest.visualStyle,
-      studentType: nextRequest.studentType,
+      level: preparedRequest.level,
+      duration: preparedRequest.duration,
+      sourceMode: preparedRequest.sourceMode,
+      visualStyle: preparedRequest.visualStyle,
+      studentType: preparedRequest.studentType,
     });
     try {
       const response = await fetch("/api/lessons", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(nextRequest),
+        body: JSON.stringify(preparedRequest),
       });
       const data = (await response.json()) as { lesson?: LessonDraft; error?: string };
       if (!response.ok || !data.lesson) throw new Error(data.error || "The lesson could not be generated.");
       setLesson(data.lesson);
+      if (selectedProfile) {
+        const store = createProfileStore(window.localStorage);
+        store.save(associateLessonWithProfile(selectedProfile, data.lesson));
+        setProfiles(store.list());
+      }
       viewed.current = false;
       track("lesson_generation_completed", {
         level: data.lesson.level,
@@ -71,7 +83,7 @@ export function LessonApp() {
       window.requestAnimationFrame(() => document.getElementById("lesson-workspace")?.scrollIntoView({ behavior: "smooth" }));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "The lesson could not be generated.");
-      track("lesson_generation_failed", { reason: "unknown", level: nextRequest.level, duration: nextRequest.duration, sourceMode: nextRequest.sourceMode });
+      track("lesson_generation_failed", { reason: "unknown", level: preparedRequest.level, duration: preparedRequest.duration, sourceMode: preparedRequest.sourceMode });
     } finally {
       setLoading(false);
     }
@@ -110,23 +122,68 @@ export function LessonApp() {
     if (lesson?.id === id) setLesson(null);
   }
 
+  const selectedProfile = profiles.find((profile) => profile.id === request.profileId);
+  const selectProfile = (profile: StudentProfile) => {
+    setRequest({
+      ...request,
+      profileId: profile.id,
+      language: profile.targetLanguage,
+      dialect: profile.dialect,
+      customDialect: profile.customDialect,
+      level: profile.level,
+      age: profile.ageGroup,
+      interests: profile.interests,
+      learningGoal: profile.goals,
+      strengths: profile.strengths,
+      difficulties: [profile.difficulties, profile.grammarTargets, profile.pronunciationTargets].filter(Boolean).join("; "),
+      visualStyle: profile.preferredVisualStyle,
+      practiceDensity: profile.preferredPracticeDensity,
+      recentTopics: profile.topicsUsed,
+      recentVocabulary: profile.vocabularyStudied,
+    });
+    setAdvancedOpen(true);
+    window.requestAnimationFrame(scrollToBuilder);
+  };
+  const saveProfile = (profile: StudentProfile) => {
+    const store = createProfileStore(window.localStorage);
+    const saved = store.save(profile);
+    setProfiles(store.list());
+    selectProfile(saved);
+  };
+  const deleteProfile = (id: string) => {
+    if (!window.confirm("Delete this local student profile? This cannot be undone.")) return;
+    const store = createProfileStore(window.localStorage);
+    store.remove(id);
+    setProfiles(store.list());
+    if (request.profileId === id) setRequest({ ...request, profileId: "" });
+  };
+  const deleteAll = () => {
+    if (!window.confirm("Delete every local student profile and lesson draft? This cannot be undone.")) return;
+    deleteAllLocalTeachingData(window.localStorage);
+    setProfiles([]);
+    setRecent([]);
+    setLesson(null);
+    setRequest(defaultLessonRequest);
+  };
+
   return (
     <main>
       <nav className="site-nav" aria-label="Primary navigation">
         <a className="wordmark" href="#top"><span>Super</span>class</a>
         <div className="nav-links"><a href="#how-it-works">How it works</a><a href="#pricing">Pricing preview</a></div>
-        <button type="button" className="nav-cta" onClick={scrollToBuilder}>Create My Lesson</button>
+        <button type="button" className="nav-cta" onClick={scrollToBuilder}>Create My Next Class</button>
       </nav>
 
       <section className="hero" id="top">
         <div className="hero-copy">
-          <span className="hero-kicker">THE LESSON BUILDER THAT THINKS LIKE A TEACHER</span>
-          <h1>Turn Any Idea Into a Class Students Remember</h1>
-          <p>Create a complete language lesson with conversation, vocabulary, grammar, practice, homework and answer keys. No blank slides. No hours in Canva.</p>
+          <span className="hero-kicker">INTERACTIVE LESSON SOFTWARE FOR ONLINE LANGUAGE TEACHERS</span>
+          <h1>Build Better Online Classes in Minutes</h1>
+          <p>Turn any idea, article, transcript or video into interactive lesson software, a student workbook and a complete teacher pack.</p>
           <div className="hero-actions">
-            <button className="primary-button" type="button" onClick={scrollToBuilder}>Create My Lesson</button>
-            <button className="text-button" type="button" onClick={() => selectPreset("b1-abroad", true)}>See a Demo Lesson <span>→</span></button>
+            <button className="primary-button" type="button" onClick={scrollToBuilder}>Create My Next Class</button>
+            <button className="text-button" type="button" onClick={() => selectPreset("b1-abroad", true)}>Open an Interactive Demo <span>→</span></button>
           </div>
+          <p className="platform-line">For independent tutors and teachers working through Preply, italki and other online teaching platforms.</p>
           <div className="trust-grid">
             {["A0 to C2", "Ready to present", "Teacher notes included", "Homework and answer key", "Individual or group classes", "No design work required"].map((item) => (
               <span key={item}>✓ {item}</span>
@@ -144,6 +201,17 @@ export function LessonApp() {
         </div>
       </section>
 
+      <PlatformCompatibility />
+
+      <StudentProfiles
+        profiles={profiles}
+        selectedId={request.profileId}
+        onSelect={selectProfile}
+        onSave={saveProfile}
+        onDuplicate={(id) => { const store = createProfileStore(window.localStorage); store.duplicate(id); setProfiles(store.list()); }}
+        onDelete={deleteProfile}
+      />
+
       <LessonBuilder
         request={request}
         setRequest={(next) => { setRequest(next); track("lesson_form_started", { level: next.level, duration: next.duration, sourceMode: next.sourceMode }); }}
@@ -153,9 +221,10 @@ export function LessonApp() {
         onAdvancedChange={(open) => { setAdvancedOpen(open); if (open) track("advanced_options_opened"); }}
         onPreset={selectPreset}
         onSubmit={() => void generate()}
+        selectedProfile={selectedProfile}
       />
 
-      {lesson && <LessonWorkspace lesson={lesson} onChange={setLesson} onNew={startNew} />}
+      {lesson && <LessonWorkspace lesson={lesson} onChange={setLesson} onNew={startNew} onSaveToProfile={selectedProfile ? () => saveProfile(associateLessonWithProfile(selectedProfile, lesson)) : undefined} />}
 
       {recent.length > 0 && (
         <section className="draft-library">
@@ -172,7 +241,8 @@ export function LessonApp() {
       )}
 
       <MarketingSections onCreate={scrollToBuilder} />
-      <footer className="site-footer"><a className="wordmark" href="#top"><span>Super</span>class</a><p>Provider-backed lesson generation · no external tracking or payments</p></footer>
+      <section className="privacy-control"><div><b>Your teaching data stays local.</b><p>Profiles and drafts are stored only in this browser. Superclass does not send student profile details to analytics.</p></div><button type="button" className="danger-button" onClick={deleteAll}>Delete all local teaching data</button></section>
+      <footer className="site-footer"><a className="wordmark" href="#top"><span>Super</span>class</a><div><p>Provider-backed lesson generation · no external tracking or payments</p><p>{platformDisclaimer}</p></div></footer>
     </main>
   );
 }

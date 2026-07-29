@@ -2,29 +2,30 @@
 
 import { useState } from "react";
 import { ClassroomMode } from "@/components/ClassroomMode";
+import { PostClassTools } from "@/components/PostClassTools";
 import { track } from "@/lib/analytics";
 import { productConfig } from "@/lib/config";
-import { toStudentLesson } from "@/lib/lesson/modes";
 import type { LessonDraft, LessonScreen } from "@/types/lesson";
 
 type Props = {
   lesson: LessonDraft;
   onChange: (lesson: LessonDraft) => void;
   onNew: () => void;
+  onSaveToProfile?: () => void;
 };
 
 function editableValue(screen: LessonScreen, key: "title" | "instruction" | "body") {
   return screen[key] ?? "";
 }
 
-export function LessonWorkspace({ lesson, onChange, onNew }: Props) {
+export function LessonWorkspace({ lesson, onChange, onNew, onSaveToProfile }: Props) {
   const [selected, setSelected] = useState(0);
   const [editing, setEditing] = useState(false);
   const [classroom, setClassroom] = useState(false);
-  const [printMode, setPrintMode] = useState<"teacher" | "student">("teacher");
   const [regenerating, setRegenerating] = useState(false);
   const [regenerationError, setRegenerationError] = useState("");
   const [printError, setPrintError] = useState("");
+  const [pdfLoading, setPdfLoading] = useState<"student" | "teacher" | null>(null);
   const screen = lesson.screens[Math.min(selected, lesson.screens.length - 1)];
   const previewLimit = productConfig.lockMarketingPreview ? 3 : lesson.screens.length;
   const lockedCount = Math.max(lesson.screens.length - previewLimit, 0);
@@ -88,25 +89,30 @@ export function LessonWorkspace({ lesson, onChange, onNew }: Props) {
       setRegenerating(false);
     }
   };
-  const print = () => {
-    setPrintMode(printMode);
+  const downloadPdf = async (mode: "student" | "teacher") => {
+    setPdfLoading(mode);
     setPrintError("");
-    track("print_started", { level: lesson.level, duration: lesson.duration });
-    if (typeof window.print !== "function") {
-      setPrintError("Printing is not supported in this browser. Try a desktop browser with Print / Save as PDF.");
-      return;
+    try {
+      const response = await fetch(`/api/lessons/pdf?mode=${mode}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(lesson) });
+      if (!response.ok) throw new Error("The PDF could not be generated.");
+      const blob = await response.blob();
+      const disposition = response.headers.get("content-disposition") || "";
+      const filename = disposition.match(/filename="([^"]+)"/)?.[1] || `superclass-${mode}.pdf`;
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setPrintError(error instanceof Error ? error.message : "The PDF could not be generated.");
+    } finally {
+      setPdfLoading(null);
     }
-    window.requestAnimationFrame(() => {
-      try {
-        window.print();
-      } catch {
-        setPrintError("The print dialog could not open. Check browser permissions and try again.");
-      }
-    });
   };
 
   return (
-    <section className={`workspace visual-${lesson.visualStyle} print-${printMode}`} id="lesson-workspace" aria-labelledby="workspace-title">
+    <section className={`workspace visual-${lesson.visualStyle}`} id="lesson-workspace" aria-labelledby="workspace-title">
       <header className="workspace-header">
         <div>
           <span className="section-kicker">YOUR LESSON IS READY</span>
@@ -116,7 +122,7 @@ export function LessonWorkspace({ lesson, onChange, onNew }: Props) {
         <div className="workspace-actions">
           <button type="button" className="secondary-button" onClick={onNew}>New lesson</button>
           <button type="button" className="primary-button small" onClick={() => { setClassroom(true); track("classroom_mode_started", { level: lesson.level, duration: lesson.duration }); }}>
-            Present class
+            Open Lesson Player
           </button>
         </div>
       </header>
@@ -133,14 +139,8 @@ export function LessonWorkspace({ lesson, onChange, onNew }: Props) {
           <button type="button" aria-pressed={editing} onClick={() => setEditing(true)}>Edit mode</button>
         </div>
         <div className="print-controls">
-          <label>
-            Print version
-            <select value={printMode} onChange={(event) => setPrintMode(event.target.value as "teacher" | "student")}>
-              <option value="teacher">Teacher — notes and answers</option>
-              <option value="student">Student — clean handout</option>
-            </select>
-          </label>
-          <button type="button" className="secondary-button" onClick={print}>Print / Save PDF</button>
+          <button type="button" className="secondary-button" disabled={pdfLoading !== null} onClick={() => void downloadPdf("student")}>{pdfLoading === "student" ? "Building workbook…" : "Download Student Workbook"}</button>
+          <button type="button" className="secondary-button" disabled={pdfLoading !== null} onClick={() => void downloadPdf("teacher")}>{pdfLoading === "teacher" ? "Building pack…" : "Download Teacher Pack"}</button>
         </div>
       </div>
       {printError && <p className="workspace-error" role="alert">{printError}</p>}
@@ -229,17 +229,12 @@ export function LessonWorkspace({ lesson, onChange, onNew }: Props) {
         </div>
       )}
 
-      <div className="print-layout" aria-hidden="true">
-        {(printMode === "student" ? toStudentLesson(lesson).screens : lesson.screens).map((item, index) => (
-          <article key={item.id}>
-            <small>{index + 1} · {item.type}</small><h2>{item.title}</h2><p>{item.instruction}</p>
-            {item.body && <p>{item.body}</p>}
-            {item.prompts.map((prompt) => <p key={prompt}>• {prompt}</p>)}
-            {printMode === "teacher" && item.answers.map((answer) => <p key={answer}><b>Answer:</b> {answer}</p>)}
-            {printMode === "teacher" && item.teacherNotes.map((note) => <p key={note}><b>Teacher:</b> {note}</p>)}
-          </article>
-        ))}
+      <div className="pdf-preview-grid">
+        <article className="pdf-preview student"><span>PDF PREVIEW</span><h3>Student Workbook</h3><p>Objectives, vocabulary, activities, writing space, review and homework.</p><div><i /><i /><i /></div></article>
+        <article className="pdf-preview teacher"><span>PDF PREVIEW</span><h3>Teacher Pack</h3><p>Timeline, answers, evidence, corrections, follow-ups and next lesson.</p><div><i /><i /><i /></div></article>
       </div>
+
+      <PostClassTools lesson={lesson} onSaveToProfile={lesson.profileId ? onSaveToProfile : undefined} />
 
       {classroom && <ClassroomMode lesson={lesson} initialIndex={selected} onExit={() => setClassroom(false)} />}
     </section>

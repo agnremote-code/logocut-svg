@@ -1,5 +1,4 @@
 import {
-  lessonDurations,
   lessonFocuses,
   lessonLevels,
   skills,
@@ -8,6 +7,7 @@ import {
   type LessonDraft,
   type LessonRequest,
 } from "@/types/lesson";
+import { isValidLessonDuration, lessonScreenRange } from "@/lib/lesson/duration";
 
 export type ValidationResult<T> = { ok: true; value: T } | { ok: false; errors: string[] };
 
@@ -63,7 +63,7 @@ export function validateLessonRequest(input: unknown): ValidationResult<LessonRe
   }
   if (!isString(value.language) || value.language.trim().length < 2) errors.push("Choose the language being taught.");
   if (!includes(lessonLevels, value.level)) errors.push("Choose a valid CEFR level.");
-  if (!includes(lessonDurations, value.duration)) errors.push("Choose a valid lesson duration.");
+  if (!isValidLessonDuration(value.duration)) errors.push("Choose a lesson duration between 20 and 120 minutes.");
   if (value.studentType !== "individual" && value.studentType !== "group") errors.push("Choose an individual or group class.");
   if (!includes(lessonFocuses, value.lessonFocus)) errors.push("Choose a valid lesson focus.");
   if (!includes(visualStyles, value.visualStyle)) errors.push("Choose a valid visual style.");
@@ -79,6 +79,7 @@ export function validateLessonRequest(input: unknown): ValidationResult<LessonRe
     ok: true,
     value: {
       sourceMode,
+      profileId: isString(value.profileId) ? value.profileId : "",
       source,
       videoUrl,
       transcript,
@@ -99,6 +100,13 @@ export function validateLessonRequest(input: unknown): ValidationResult<LessonRe
       visualStyle: value.visualStyle as LessonRequest["visualStyle"],
       includeHomework: value.includeHomework as boolean,
       includeRoleplay: value.includeRoleplay as boolean,
+      includeSmallTalk: isBoolean(value.includeSmallTalk) ? value.includeSmallTalk : true,
+      includeCorrection: isBoolean(value.includeCorrection) ? value.includeCorrection : true,
+      includePronunciation: isBoolean(value.includePronunciation) ? value.includePronunciation : false,
+      lastClassCovered: isString(value.lastClassCovered) ? value.lastClassCovered.trim().slice(0, 500) : "",
+      continueOrCorrect: isString(value.continueOrCorrect) ? value.continueOrCorrect.trim().slice(0, 500) : "",
+      recentTopics: isStringArray(value.recentTopics) ? value.recentTopics.slice(0, 20).map((item) => item.slice(0, 120)) : [],
+      recentVocabulary: isStringArray(value.recentVocabulary) ? value.recentVocabulary.slice(0, 80).map((item) => item.slice(0, 80)) : [],
     },
   };
 }
@@ -123,7 +131,7 @@ export function validateLessonDraft(input: unknown, request?: LessonRequest): Va
   if (!isString(lesson.language) || !lesson.language.trim()) errors.push("Lesson language is missing.");
   if (!isString(lesson.dialect)) errors.push("Lesson dialect is invalid.");
   if (!includes(lessonLevels, lesson.level)) errors.push("Lesson level is invalid.");
-  if (!includes(lessonDurations, lesson.duration)) errors.push("Lesson duration is invalid.");
+  if (!isValidLessonDuration(lesson.duration)) errors.push("Lesson duration is invalid.");
   if (!includes(visualStyles, lesson.visualStyle)) errors.push("Lesson visual style is invalid.");
   if (!isString(lesson.studentProfile)) errors.push("Student profile is invalid.");
   if (!isStringArray(lesson.objectives) || lesson.objectives.length === 0) errors.push("Lesson objectives are missing.");
@@ -136,7 +144,7 @@ export function validateLessonDraft(input: unknown, request?: LessonRequest): Va
   if (errors.length) return { ok: false, errors };
 
   const typed = lesson as unknown as LessonDraft;
-  const screenRange = typed.duration === 30 ? [8, 12] : typed.duration === 45 ? [12, 17] : typed.duration === 60 ? [16, 24] : [24, 36];
+  const screenRange = lessonScreenRange(typed.duration);
   if (typed.screens.length < screenRange[0] || typed.screens.length > screenRange[1]) errors.push("Screen count does not match lesson duration.");
   for (const [index, rawScreen] of typed.screens.entries()) {
     if (!rawScreen || typeof rawScreen !== "object") {

@@ -43,7 +43,7 @@ export const lessonDraftJsonSchema = {
     dialect: { type: "string" },
     level: { type: "string", enum: ["A0", "A1", "A2", "B1", "B2", "C1", "C2"] },
     duration: { type: "integer", minimum: 20, maximum: 120 },
-    visualStyle: { type: "string", enum: ["retro-game", "clean-classroom", "editorial", "dark-debate", "travel", "corporate"] },
+    visualStyle: { type: "string", enum: ["light-editorial", "clean-classroom", "editorial", "dark-debate", "travel", "corporate", "retro-game"] },
     studentProfile: { type: "string" },
     objectives: stringArray,
     screens: {
@@ -103,7 +103,7 @@ export const lessonDraftJsonSchema = {
           timing: { type: "integer" },
           layout: {
             type: "string",
-            enum: ["cover", "objective", "comparison", "rule-cards", "example-gallery", "vocabulary-cards", "illustrated-context", "sentence-builder", "multiple-choice", "sorting", "fill-gap", "error-correction", "dialogue", "pronunciation", "personal-prompts", "debate-cards", "recap", "homework"],
+            enum: ["cover", "objective", "comparison", "rule-cards", "example-gallery", "vocabulary-cards", "illustrated-context", "sentence-builder", "multiple-choice", "sorting", "fill-gap", "error-correction", "dialogue", "pronunciation", "personal-prompts", "debate-cards", "recap", "homework", "topic-menu", "image-topic", "verb-bank", "connector-bank", "guided-questions", "feedback"],
           },
           sourceExcerpt: { type: "string" },
           videoId: { type: "string" },

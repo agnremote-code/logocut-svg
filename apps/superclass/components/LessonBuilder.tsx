@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { demoPresets } from "@/lib/presets";
 import { effectiveLanguageMode, languageLabel, languageOptions } from "@/lib/lesson/language";
 import { switchSourceMode } from "@/lib/lesson/request-state";
+import { classPlanPreview, lessonFormatOptions } from "@/lib/lesson/archetypes";
 import {
   lessonDurations,
   lessonLevels,
@@ -87,6 +88,10 @@ export function LessonBuilder({
   const [transcriptStatus, setTranscriptStatus] = useState<"idle" | "reading" | "captions" | "preparing" | "ready" | "unavailable" | "error">("idle");
   const [transcriptMessage, setTranscriptMessage] = useState("");
   const [transcriptMeta, setTranscriptMeta] = useState("");
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
+  const classPlan = classPlanPreview(request);
+  const selectedFormat = lessonFormatOptions.find((item) => item.value === request.lessonFormat) ?? lessonFormatOptions[0];
+  const chatGptHelperPrompt = "I am creating an online language class. Help me write clear instructions for a lesson generator. Ask me about the student’s level, target language, support language, topic, goals, activities, visual style, lesson duration and homework. Then return one structured prompt that I can paste into the lesson generator.";
 
   useEffect(() => {
     if (request.sourceMode !== "video" || !/^https?:\/\/.+/i.test(request.videoUrl)) {
@@ -219,6 +224,34 @@ export function LessonBuilder({
         </label>
       )}
 
+      <div className="lesson-format-block">
+        <label className="field">
+          <span>LESSON FORMAT</span>
+          <select value={request.lessonFormat} onChange={(event) => update("lessonFormat", event.target.value as LessonRequest["lessonFormat"])}>
+            {lessonFormatOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+          <small>{selectedFormat.description}</small>
+        </label>
+        <label className="field custom-class-field">
+          <span>How should this class work?</span>
+          <small>Describe the structure, activities, tone or visual style you want.</small>
+          <textarea
+            value={request.customClassInstructions}
+            onChange={(event) => update("customClassInstructions", event.target.value)}
+            placeholder="Start with vocabulary, explain ser and estar in English, include six short exercises, finish with personal speaking questions, and keep every example bilingual."
+          />
+        </label>
+        <aside className="prompt-helper">
+          <div><b>Need help describing your class?</b><p>Ask ChatGPT to organize your idea into a lesson-generation prompt, then paste it here.</p></div>
+          <button type="button" onClick={async () => {
+            await navigator.clipboard.writeText(chatGptHelperPrompt);
+            setCopiedPrompt(true);
+            window.setTimeout(() => setCopiedPrompt(false), 1_800);
+          }}>{copiedPrompt ? "Prompt copied" : "Copy prompt for ChatGPT"}</button>
+          <small>Copy only. No direct integration and no data is sent automatically.</small>
+        </aside>
+      </div>
+
       <div className="essential-grid">
         <LanguageCombobox id="target-language" label="Target language" value={request.language} customValue={request.customLanguage} onChange={(value) => update("language", value)} onCustomChange={(value) => update("customLanguage", value)} />
         <LanguageCombobox id="support-language" label="Support language" value={request.supportLanguage} customValue={request.customSupportLanguage} onChange={(value) => update("supportLanguage", value)} onCustomChange={(value) => update("customSupportLanguage", value)} />
@@ -254,6 +287,13 @@ export function LessonBuilder({
           </select>
         </label>
       </div>
+
+      <aside className="class-plan-preview" aria-label="Class plan">
+        <div><small>CLASS PLAN</small><strong>{classPlan.label}</strong></div>
+        <p>{request.level} · {languageLabel(request.language, request.customLanguage)} with {languageLabel(request.supportLanguage, request.customSupportLanguage)} support</p>
+        <b>Approximately {classPlan.screens} screens</b>
+        <span>{classPlan.structure}</span>
+      </aside>
 
       <details className="advanced-panel" open={advancedOpen} onToggle={(event) => onAdvancedChange(event.currentTarget.open)}>
         <summary aria-expanded={advancedOpen}>

@@ -1,5 +1,6 @@
 import {
   lessonFocuses,
+  lessonFormats,
   languageIds,
   languageModes,
   lessonLevels,
@@ -74,6 +75,7 @@ export function validateLessonRequest(input: unknown): ValidationResult<LessonRe
   if (!isValidLessonDuration(value.duration)) errors.push("Choose a lesson duration between 20 and 120 minutes.");
   if (value.studentType !== "individual" && value.studentType !== "group") errors.push("Choose an individual or group class.");
   if (!includes(lessonFocuses, value.lessonFocus)) errors.push("Choose a valid lesson focus.");
+  if (!includes(lessonFormats, value.lessonFormat ?? "automatic")) errors.push("Choose a valid lesson format.");
   if (!includes(visualStyles, value.visualStyle)) errors.push("Choose a valid visual style.");
   if (!["neutral", "rioplatense", "spain", "mexican", "custom"].includes(String(value.dialect))) errors.push("Choose a valid dialect.");
   if (!["compact", "standard", "repetition-heavy"].includes(String(value.practiceDensity))) errors.push("Choose a valid practice density.");
@@ -108,6 +110,8 @@ export function validateLessonRequest(input: unknown): ValidationResult<LessonRe
       difficulties: isString(value.difficulties) ? value.difficulties.trim().slice(0, 300) : "",
       skillsFocus: value.skillsFocus as LessonRequest["skillsFocus"],
       lessonFocus: value.lessonFocus as LessonRequest["lessonFocus"],
+      lessonFormat: (value.lessonFormat ?? "automatic") as LessonRequest["lessonFormat"],
+      customClassInstructions: isString(value.customClassInstructions) ? value.customClassInstructions.trim().slice(0, 2_000) : "",
       practiceDensity: value.practiceDensity as LessonRequest["practiceDensity"],
       visualStyle: value.visualStyle as LessonRequest["visualStyle"],
       includeHomework: value.includeHomework as boolean,
@@ -168,7 +172,10 @@ export function validateLessonDraft(input: unknown, request?: LessonRequest): Va
       errors.push(`Screen ${index + 1} has no ID.`);
       continue;
     }
-    const rule = limits[screen.type] ?? limits.default;
+    const baseRule = limits[screen.type] ?? limits.default;
+    const rule = ["topic-menu", "verb-bank", "connector-bank"].includes(screen.layout)
+      ? { ...baseRule, questions: 4 }
+      : baseRule;
     if (!isString(screen.title) || !screen.title.trim() || screen.title.length > rule.title) errors.push(`Invalid title on ${screen.id}.`);
     if (!isString(screen.instruction) || !screen.instruction.trim()) errors.push(`Instruction is missing on ${screen.id}.`);
     if (screen.body !== undefined && !isString(screen.body)) errors.push(`Body is invalid on ${screen.id}.`);

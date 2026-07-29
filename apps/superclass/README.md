@@ -29,7 +29,7 @@ npm run build
 - Five anonymized demo presets
 - Plan-first deterministic and AI lesson providers with topic locking, a language-output contract, specialized grammar planning, level-specific pedagogy and duration-specific screen density
 - Shared request and lesson validation with content limits, duplicate detection, topic-coverage scoring, wrong-language detection, layout variety and one structured provider repair
-- Lesson overview, slide strip, edit controls, teacher notes and a true 16:9 Lesson Player with varied reusable layouts, modules, progress, activity state, teacher/student privacy, fullscreen and keyboard navigation
+- Lesson overview, slide strip, edit controls and a true 16:9 Light Editorial Lesson Player with on-demand Teacher tools, teacher/student privacy, fullscreen and keyboard navigation
 - Server-generated Student Workbook and Teacher Pack PDFs with distinct content, page numbering, writing space and reliable Spanish text support
 - Post-class recap, corrections, vocabulary, grammar, pronunciation, homework, next-class suggestion and copy-ready student message
 - Latest/recent local draft persistence, restore, duplicate, and delete
@@ -42,7 +42,7 @@ npm run build
 - `types/` — stable request, screen, and lesson contracts
 - `lib/validation/` — shared request, URL, and generated-content validation
 - `lib/providers/` — server-only provider interface, plan-aware prompts, timeout/error boundary, deterministic provider and one-attempt structured repair
-- `lib/lesson/` — pedagogical planning, language contracts, quality scoring, deterministic topic templates and teacher/student projection
+- `lib/lesson/` — pedagogical planning, archetype selection, three level engines, language contracts, quality scoring, deterministic topic templates and teacher/student projection
 - `lib/transcripts/` — caption/import and uploaded-media transcription provider interface
 - `lib/storage/` — versioned local draft serialization and browser store
 - `lib/pdf/` — serverless `pdf-lib` document generation; no browser or Chromium runtime
@@ -53,16 +53,19 @@ npm run build
 
 ### Generation pipeline
 
-Every provider receives the same validated `LessonPlan` before it creates screens:
+Every provider receives the same validated `LessonPlan` and one of nine structured archetypes before it creates screens:
 
 1. **Plan** — locks the exact topic, topic type, target/support languages, CEFR level, objectives, required structures and keywords, activity sequence, language distribution, and prohibited unrelated content.
-2. **Generate** — creates only screens allowed by that plan, using an explicit layout contract.
-3. **Validate** — checks schema safety, duration, source grounding, answer evidence, topic coverage, requested language, bilingual support, CEFR suitability, activity relevance, layout variety and preset leakage.
-4. **Repair once** — returns the validation findings to the same provider while preserving the original request. A second invalid result fails visibly; it is never replaced by generic local content.
+2. **Choose an engine** — A0–A1 uses bilingual visual banks and guided speaking; A2–B1 uses contextual input, grammar workshops and scenarios; B2–C2 uses editorial or debate arcs with evidence, dilemmas and longer turns.
+3. **Generate** — fills only layouts allowed by the chosen archetype, including an honest image-slot policy (bundled diagram, external source image, teacher upload or planned generated illustration).
+4. **Validate** — checks schema safety, duration, source grounding, answer evidence, topic coverage, requested language, bilingual support, CEFR suitability, activity relevance, layout variety and preset leakage.
+5. **Repair once** — returns the validation findings to the same provider while preserving the original request. A second invalid result fails visibly; it is never replaced by generic local content.
 
 Focused grammar lessons require at least 80% topic coverage. General lessons require at least 55%. The language validator combines explicit target-language evidence, topic terms and common wrong-language markers rather than relying on a raw character ratio.
 
-The local provider supports realistic no-cost development for grammar, vocabulary, conversation, pronunciation, text comprehension and video comprehension. Common Spanish grammar topics receive specialized planning, and `ser`/`estar` receives a complete 17-screen bilingual B1 sequence with comparison, rules, examples, sorting, selection, gap fill, error correction, contextual situations, personal speaking, dialogue, recap, homework and a private answer key.
+The local provider supports realistic no-cost development for grammar, vocabulary, conversation, pronunciation, text comprehension and video comprehension. Common Spanish grammar topics receive specialized planning. `ser`/`estar` uses an exact 14-screen intermediate workshop—cover, objective, comparison, uses of SER, uses of ESTAR, choice, sorting, completion, correction, situations, personal questions, dialogue, review and homework—plus one private answer-key screen.
+
+The beginner engine includes reusable `TopicMenu`, `ImageTopicCard`, `VocabularyBank`, `VerbBank`, `ConnectorBank`, `SentenceStarterBank`, `GuidedQuestionList`, `ExampleReveal`, `TopicNavigation` and `BeginnerFeedback` components. Its built-in image-led lessons use repository-owned designed diagrams and label them honestly; no generated or external image is claimed.
 
 ### Provider configuration
 
@@ -119,6 +122,8 @@ The default `gpt-5.4-mini` estimator uses current standard pricing of $0.75 per 
 Actual usage varies with source length, model behavior, regional processing, and future pricing. Unknown custom models display token estimates without inventing a cost.
 
 ## Known limitations
+
+- The named “Buenos Aires en Español” and “PREPLY-ITALKI CANVA 2” source files were not present in the repository or available attachment directory. This implementation follows the complete visual and pedagogical characteristics supplied with the task, without copying or claiming access to Canva code.
 
 - Production caption import and uploaded-media transcription require a separately operated, lawful `configured-provider` endpoint; no third-party transcript service is bundled
 - The local transcript provider is intentionally mocked and is never a source of real captions

@@ -5,6 +5,9 @@ import { createLessonPlan } from "@/lib/lesson/planning";
 import { buildSerEstarScreens } from "@/lib/lesson/ser-estar";
 import { buildSpanishGrammarScreens } from "@/lib/lesson/spanish-grammar";
 import { buildSpanishTopicScreens } from "@/lib/lesson/spanish-generic";
+import { buildBeginnerScreens } from "@/lib/lesson/beginner-engine";
+import { buildAdvancedScreens } from "@/lib/lesson/advanced-engine";
+import { selectLessonArchetype } from "@/lib/lesson/archetypes";
 import { extractYouTubeId } from "@/lib/validation/lesson";
 import type { LessonDraft, LessonRequest, LessonScreen, ScreenLayout, ScreenType, VocabularyItem } from "@/types/lesson";
 
@@ -151,10 +154,23 @@ function profileSummary(request: LessonRequest) {
   return details.join(" · ");
 }
 
+function lessonTitle(request: LessonRequest, topic: string, specializedTemplate?: string) {
+  const material = `${topic} ${request.source}`.toLocaleLowerCase();
+  if (specializedTemplate === "ser-estar") return "SER vs ESTAR";
+  if (/buenos aires/.test(material)) return "Buenos Aires en Español";
+  if (/routine|rutina diaria/.test(material)) return "Mi rutina diaria";
+  if (/las vegas|casino|gambl/.test(material)) return "Las Vegas: Risk by Design";
+  if (/ethical|ética|dilemma/.test(material)) return "Where Should We Draw the Line?";
+  return topic.charAt(0).toUpperCase() + topic.slice(1);
+}
+
 function buildScreens(request: LessonRequest, topic: string) {
   const plan = createLessonPlan(request);
+  const archetype = selectLessonArchetype(request);
   if (plan.specializedTemplate === "ser-estar" && request.language === "es") return buildSerEstarScreens(request);
+  if (archetype.engine === "beginner") return buildBeginnerScreens(request, topic);
   if (plan.specializedTemplate && request.language === "es" && request.sourceMode === "idea") return buildSpanishGrammarScreens(request, plan);
+  if (archetype.engine === "advanced" && request.sourceMode === "idea" && request.language !== "es") return buildAdvancedScreens(request, topic, archetype.id);
   if (request.language === "es") return buildSpanishTopicScreens(request, topic, extractYouTubeId(request.videoUrl) ?? undefined);
   const guidance = levelGuidance[request.level];
   const key = contextKey(request, topic);
@@ -364,6 +380,7 @@ export const deterministicProvider: LessonProvider<LessonDraft> = {
   async generate(request, context) {
     const topic = topicFrom(request);
     const plan = createLessonPlan(request);
+    const archetype = selectLessonArchetype(request);
     const guidance = levelGuidance[request.level];
     const dialect = request.dialect === "custom" ? request.customDialect || "Custom" : request.dialect;
     return {
@@ -371,11 +388,12 @@ export const deterministicProvider: LessonProvider<LessonDraft> = {
       id: `lesson-${context.contentHash}`,
       requestId: context.requestId,
       contentHash: context.contentHash,
-      title: plan.specializedTemplate === "ser-estar" ? "SER vs ESTAR" : topic.charAt(0).toUpperCase() + topic.slice(1),
+      title: lessonTitle(request, topic, plan.specializedTemplate),
       dialect,
       level: request.level,
       duration: request.duration,
       visualStyle: request.visualStyle,
+      archetype: archetype.id,
       studentProfile: profileSummary(request),
       objectives: plan.specializedTemplate === "ser-estar" ? [
         "Elegir ser o estar en situaciones comunes.",

@@ -4,6 +4,7 @@ export type ProviderContext = {
   requestId: string;
   contentHash: string;
   signal?: AbortSignal;
+  repairErrors?: string[];
 };
 
 export interface LessonProvider<Output = unknown> {

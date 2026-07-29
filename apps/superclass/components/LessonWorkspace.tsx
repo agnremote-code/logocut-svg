@@ -66,6 +66,7 @@ export function LessonWorkspace({ lesson, onChange, onNew, onSaveToProfile }: Pr
       answers: [],
       teacherNotes: ["Add a private teaching note."],
       timing: 4,
+      layout: "multiple-choice",
     };
     onChange({ ...lesson, screens: [...lesson.screens, next] });
     setSelected(lesson.screens.length);
@@ -199,11 +200,17 @@ export function LessonWorkspace({ lesson, onChange, onNew, onSaveToProfile }: Pr
               {regenerationError && <p className="inline-error" role="alert">{regenerationError}</p>}
             </div>
           ) : (
-            <article className={`lesson-canvas type-${screen.type}`}>
+            <article className={`lesson-canvas type-${screen.type} layout-${screen.layout}`} data-layout={screen.layout}>
               <span className="screen-type">{screen.type.replaceAll("-", " ")}</span>
               <h3>{screen.title}</h3>
               <p className="canvas-instruction">{screen.instruction}</p>
-              {screen.body && <p>{screen.body}</p>}
+              {screen.layout === "comparison" && screen.body ? (
+                <div className="preview-comparison">
+                  <div><b>SER</b><p>{screen.body.split(/ESTAR\s*→/i)[0]?.replace(/SER\s*→/i, "").trim()}</p></div>
+                  <span>VS</span>
+                  <div><b>ESTAR</b><p>{screen.body.split(/ESTAR\s*→/i)[1]?.trim()}</p></div>
+                </div>
+              ) : screen.body && <p>{screen.body}</p>}
               {screen.sourceExcerpt && <blockquote>{screen.sourceExcerpt}</blockquote>}
               {screen.prompts.length > 0 && <div className="canvas-prompts">{screen.prompts.map((prompt) => <div key={prompt}>{prompt}</div>)}</div>}
               {screen.vocabulary.length > 0 && <div className="canvas-vocab">{screen.vocabulary.map((item) => <div key={item.term}><b>{item.term}</b><span>{item.meaning}</span></div>)}</div>}

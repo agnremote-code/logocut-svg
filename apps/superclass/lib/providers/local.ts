@@ -1,7 +1,12 @@
 import type { LessonProvider } from "@/lib/providers/types";
+import { languageLabel } from "@/lib/lesson/language";
 import { normalizeActivityTiming, targetScreenCount } from "@/lib/lesson/duration";
+import { createLessonPlan } from "@/lib/lesson/planning";
+import { buildSerEstarScreens } from "@/lib/lesson/ser-estar";
+import { buildSpanishGrammarScreens } from "@/lib/lesson/spanish-grammar";
+import { buildSpanishTopicScreens } from "@/lib/lesson/spanish-generic";
 import { extractYouTubeId } from "@/lib/validation/lesson";
-import type { LessonDraft, LessonRequest, LessonScreen, ScreenType, VocabularyItem } from "@/types/lesson";
+import type { LessonDraft, LessonRequest, LessonScreen, ScreenLayout, ScreenType, VocabularyItem } from "@/types/lesson";
 
 const levelGuidance = {
   A0: {
@@ -112,6 +117,13 @@ function screen(
   instruction: string,
   options: Partial<Omit<LessonScreen, "id" | "type" | "title" | "instruction">> = {},
 ): LessonScreen {
+  const layoutByType: Partial<Record<ScreenType, ScreenLayout>> = {
+    cover: "cover", objective: "objective", vocabulary: "vocabulary-cards", pronunciation: "pronunciation",
+    microgrammar: "rule-cards", "sentence-frames": "sentence-builder", "controlled-practice": "multiple-choice",
+    "error-correction": "error-correction", "personal-questions": "personal-prompts", discussion: "dialogue",
+    debate: "debate-cards", review: "recap", "exit-task": "recap", homework: "homework", context: "illustrated-context",
+    source: "example-gallery", video: "illustrated-context", comprehension: "multiple-choice", "answer-key": "recap", warmup: "personal-prompts",
+  };
   return {
     id: `screen-${index + 1}-${type}`,
     type,
@@ -123,6 +135,7 @@ function screen(
     answers: (options.answers ?? []).map((item) => clean(item, 180)),
     teacherNotes: (options.teacherNotes ?? []).map((item) => clean(item, 220)),
     timing: options.timing ?? 3,
+    layout: options.layout ?? layoutByType[type] ?? "example-gallery",
     sourceExcerpt: options.sourceExcerpt ? clean(options.sourceExcerpt, 320) : undefined,
     videoId: options.videoId,
   };
@@ -139,6 +152,10 @@ function profileSummary(request: LessonRequest) {
 }
 
 function buildScreens(request: LessonRequest, topic: string) {
+  const plan = createLessonPlan(request);
+  if (plan.specializedTemplate === "ser-estar" && request.language === "es") return buildSerEstarScreens(request);
+  if (plan.specializedTemplate && request.language === "es" && request.sourceMode === "idea") return buildSpanishGrammarScreens(request, plan);
+  if (request.language === "es") return buildSpanishTopicScreens(request, topic, extractYouTubeId(request.videoUrl) ?? undefined);
   const guidance = levelGuidance[request.level];
   const key = contextKey(request, topic);
   const vocab = vocabulary(topic, key, request.recentVocabulary);
@@ -179,7 +196,7 @@ function buildScreens(request: LessonRequest, topic: string) {
       prompts: ["What is the speaker’s main message?", "Which phrase carries the strongest meaning?"],
       sourceExcerpt,
       videoId: extractYouTubeId(request.videoUrl) ?? undefined,
-      teacherNotes: ["No transcript was fetched. Questions use only the transcript or notes supplied by the teacher."],
+      teacherNotes: ["Questions use only the imported or teacher-edited transcript supplied with this request."],
       timing: 6,
     });
   } else if (request.sourceMode === "text") {
@@ -346,6 +363,7 @@ export const deterministicProvider: LessonProvider<LessonDraft> = {
   name: "deterministic-local",
   async generate(request, context) {
     const topic = topicFrom(request);
+    const plan = createLessonPlan(request);
     const guidance = levelGuidance[request.level];
     const dialect = request.dialect === "custom" ? request.customDialect || "Custom" : request.dialect;
     return {
@@ -353,18 +371,22 @@ export const deterministicProvider: LessonProvider<LessonDraft> = {
       id: `lesson-${context.contentHash}`,
       requestId: context.requestId,
       contentHash: context.contentHash,
-      title: topic.charAt(0).toUpperCase() + topic.slice(1),
-      language: request.language,
+      title: plan.specializedTemplate === "ser-estar" ? "SER vs ESTAR" : topic.charAt(0).toUpperCase() + topic.slice(1),
       dialect,
       level: request.level,
       duration: request.duration,
       visualStyle: request.visualStyle,
       studentProfile: profileSummary(request),
-      objectives: [
+      objectives: plan.specializedTemplate === "ser-estar" ? [
+        "Elegir ser o estar en situaciones comunes.",
+        "Usar ser para identidad, origen, profesión y características.",
+        "Usar estar para ubicación, emociones y condiciones actuales.",
+      ] : [
         `Use level-appropriate language to ${guidance.objective}.`,
         `Apply vocabulary and skills connected to ${topic}.`,
         request.learningGoal ? `Personal goal: ${clean(request.learningGoal, 130)}.` : "Finish with a clear, independent response.",
       ],
+      language: languageLabel(request.language, request.customLanguage),
       screens: buildScreens(request, topic),
       sourceMode: request.sourceMode,
       createdAt: new Date(0).toISOString(),

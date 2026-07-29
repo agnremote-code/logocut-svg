@@ -52,7 +52,7 @@ export function createOpenAiProvider(options: { apiKey: string; model: string; f
                 content:
                   "You are an expert CEFR language-teaching curriculum designer. Follow the supplied source exactly and produce safe, practical classroom materials.",
               },
-              { role: "user", content: buildLessonPrompt(lessonRequest) },
+              { role: "user", content: buildLessonPrompt(lessonRequest, context.repairErrors) },
             ],
             text: {
               format: {

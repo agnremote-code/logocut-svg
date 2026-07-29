@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { sanitizeAnalyticsMetadata } from "../lib/analytics";
+import { lessonScreenRange } from "../lib/lesson/duration";
 import { toStudentLesson } from "../lib/lesson/modes";
 import { deterministicProvider } from "../lib/providers/local";
 import { generateLesson } from "../lib/providers/generate";
@@ -32,11 +33,11 @@ test("every CEFR level produces validated, level-specific output", async () => {
 });
 
 test("every duration stays inside its required screen range", async () => {
-  const ranges = { 30: [8, 12], 45: [12, 17], 60: [16, 24], 90: [24, 36] } as const;
   for (const duration of lessonDurations) {
     const lesson = await deterministicProvider.generate({ ...defaultLessonRequest, duration }, context);
-    assert.ok(lesson.screens.length >= ranges[duration][0]);
-    assert.ok(lesson.screens.length <= ranges[duration][1]);
+    const [minimum, maximum] = lessonScreenRange(duration);
+    assert.ok(lesson.screens.length >= minimum);
+    assert.ok(lesson.screens.length <= maximum);
     assert.equal(validateLessonDraft(lesson).ok, true);
   }
 });

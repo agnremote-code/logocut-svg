@@ -8,6 +8,7 @@ import {
   visualStyles,
   type LessonRequest,
   type SourceMode,
+  type StudentProfile,
 } from "@/types/lesson";
 
 type Props = {
@@ -19,6 +20,7 @@ type Props = {
   onAdvancedChange: (open: boolean) => void;
   onPreset: (id: string) => void;
   onSubmit: () => void;
+  selectedProfile?: StudentProfile;
 };
 
 const modeCopy: Record<SourceMode, string> = {
@@ -38,6 +40,7 @@ export function LessonBuilder({
   onAdvancedChange,
   onPreset,
   onSubmit,
+  selectedProfile,
 }: Props) {
   const update = <K extends keyof LessonRequest>(key: K, value: LessonRequest[K]) => setRequest({ ...request, [key]: value });
 
@@ -58,6 +61,7 @@ export function LessonBuilder({
           </button>
         ))}
       </div>
+      {selectedProfile && <div className="selected-profile-banner"><span>{selectedProfile.nickname.slice(0, 2).toUpperCase()}</span><div><small>BUILDING FOR</small><b>{selectedProfile.nickname}</b><p>{selectedProfile.targetLanguage} · {selectedProfile.dialect} · {selectedProfile.level} · {selectedProfile.goals || "Personalized lesson"}</p></div></div>}
 
       <div className="mode-tabs" role="group" aria-label="Lesson source type">
         {(["idea", "text", "video"] as SourceMode[]).map((mode) => (
@@ -122,10 +126,12 @@ export function LessonBuilder({
         </label>
         <label className="field">
           <span>Duration</span>
-          <select value={request.duration} onChange={(event) => update("duration", Number(event.target.value) as LessonRequest["duration"])}>
+          <select value={lessonDurations.includes(request.duration as (typeof lessonDurations)[number]) ? request.duration : "custom"} onChange={(event) => update("duration", event.target.value === "custom" ? 55 : Number(event.target.value))}>
             {lessonDurations.map((duration) => <option key={duration} value={duration}>{duration} minutes</option>)}
+            <option value="custom">Custom duration</option>
           </select>
         </label>
+        {!lessonDurations.includes(request.duration as (typeof lessonDurations)[number]) && <label className="field"><span>Custom minutes (20-120)</span><input type="number" min={20} max={120} value={request.duration} onChange={(event) => update("duration", Math.min(120, Math.max(20, Number(event.target.value))))} /></label>}
         <label className="field">
           <span>Class type</span>
           <select value={request.studentType} onChange={(event) => update("studentType", event.target.value as LessonRequest["studentType"])}>
@@ -179,6 +185,14 @@ export function LessonBuilder({
               <input value={request.difficulties} onChange={(event) => update("difficulties", event.target.value)} />
             </label>
             <label className="field">
+              <span>What did you cover in the last class?</span>
+              <input value={request.lastClassCovered} onChange={(event) => update("lastClassCovered", event.target.value)} />
+            </label>
+            <label className="field">
+              <span>What should this class continue or correct?</span>
+              <input value={request.continueOrCorrect} onChange={(event) => update("continueOrCorrect", event.target.value)} />
+            </label>
+            <label className="field">
               <span>Lesson focus</span>
               <select value={request.lessonFocus} onChange={(event) => update("lessonFocus", event.target.value as LessonRequest["lessonFocus"])}>
                 <option value="conversation">Conversation</option>
@@ -227,6 +241,18 @@ export function LessonBuilder({
               <span>Include homework</span>
             </label>
             <label className="toggle">
+              <input type="checkbox" checked={request.includeSmallTalk} onChange={(event) => update("includeSmallTalk", event.target.checked)} />
+              <span>10-15 minute small-talk opening</span>
+            </label>
+            <label className="toggle">
+              <input type="checkbox" checked={request.includeCorrection} onChange={(event) => update("includeCorrection", event.target.checked)} />
+              <span>Include correction segment</span>
+            </label>
+            <label className="toggle">
+              <input type="checkbox" checked={request.includePronunciation} onChange={(event) => update("includePronunciation", event.target.checked)} />
+              <span>Include pronunciation segment</span>
+            </label>
+            <label className="toggle">
               <input type="checkbox" checked={request.includeRoleplay} onChange={(event) => update("includeRoleplay", event.target.checked)} />
               <span>Enable roleplay</span>
             </label>
@@ -236,7 +262,7 @@ export function LessonBuilder({
 
       {error && <div className="form-error" role="alert">{error}</div>}
       <button className="primary-button generate-button" type="button" disabled={loading} onClick={onSubmit}>
-        {loading ? "Building your class…" : "Create My Lesson"}
+        {loading ? "Building your class…" : "Create My Next Class"}
       </button>
       <p className="privacy-note">Your lesson stays in this browser. No student data is sent to analytics.</p>
     </section>

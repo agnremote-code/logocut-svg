@@ -1,19 +1,12 @@
-import type { LessonDuration, LessonRequest } from "@/types/lesson";
+import type { LessonRequest } from "@/types/lesson";
 
 export type TokenEstimate = { inputTokens: number; outputTokens: number };
-
-const outputTokensByDuration: Record<LessonDuration, number> = {
-  30: 4_500,
-  45: 6_500,
-  60: 9_000,
-  90: 13_000,
-};
 
 export function estimateLessonTokens(request: LessonRequest): TokenEstimate {
   const activeSource = request.sourceMode === "video" ? request.transcript : request.source;
   return {
     inputTokens: Math.ceil(activeSource.length / 4) + 1_800,
-    outputTokens: outputTokensByDuration[request.duration],
+    outputTokens: Math.round(1_500 + request.duration * 125),
   };
 }
 

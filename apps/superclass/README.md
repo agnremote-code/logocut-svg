@@ -24,12 +24,14 @@ npm run build
 - Idea, text/transcript, and video source modes
 - YouTube ID parsing and privacy-enhanced embedding
 - Explicit transcript requirement for source-grounded video lessons
-- A0–C2, four durations, individual/group, dialect, profile, skills, focus, practice density, homework, and opt-in roleplay controls
+- A0–C2; 25, 30, 45, 50, 60 and 90-minute presets; custom 20–120-minute durations; individual/group, dialect, skills, focus and practice-density controls
+- Local-only student profiles with teaching preferences, lesson continuity, topic/vocabulary history and repetition avoidance
 - Five anonymized demo presets
 - Deterministic local lesson provider with level-specific pedagogy and duration-specific screen density
 - Shared request and lesson validation with content limits and duplicate detection
-- Lesson overview, slide strip, edit controls, teacher notes, classroom mode, answer reveal, timer, and keyboard navigation
-- Teacher and student print versions
+- Lesson overview, slide strip, edit controls, teacher notes and a software-style Lesson Player with modules, progress, activity state, teacher/student privacy, fullscreen and keyboard navigation
+- Server-generated Student Workbook and Teacher Pack PDFs with distinct content, page numbering, writing space and reliable Spanish text support
+- Post-class recap, corrections, vocabulary, grammar, pronunciation, homework, next-class suggestion and copy-ready student message
 - Latest/recent local draft persistence, restore, duplicate, and delete
 - Marketing preview lock controlled by `NEXT_PUBLIC_SUPERCLASS_UNLOCKED=true`
 - Provider-agnostic analytics wrapper with external tracking disabled
@@ -41,6 +43,7 @@ npm run build
 - `lib/validation/` — shared request, URL, and generated-content validation
 - `lib/providers/` — server-only provider interface, timeout/error boundary, and deterministic demo provider
 - `lib/storage/` — versioned local draft serialization and browser store
+- `lib/pdf/` — serverless `pdf-lib` document generation; no browser or Chromium runtime
 - `lib/analytics/` — safe categorical event contract and disabled default provider
 - `lib/lesson/` — teacher/student projection helpers
 - `components/` — focused builder, workspace, classroom, and marketing UI
@@ -89,10 +92,10 @@ Actual usage varies with source length, model behavior, regional processing, and
 - No automatic transcript retrieval
 - The in-memory cache and diagnostics history are process-local and reset between server instances
 - Cost and token figures are planning estimates rather than provider billing records
-- No accounts, teams, cloud database, or reusable named student profiles
-- Local drafts are device/browser-specific
+- No accounts, teams or cloud database
+- Student profiles, history and drafts are device/browser-specific and can be deleted together from the privacy control
 - No payment or unlock implementation
-- Print uses the browser’s Print / Save as PDF capability
+- PDFs use built-in Helvetica fonts (including common Spanish characters); unsupported typography is normalized safely
 - No PowerPoint or Google Slides export
 - Video embedding depends on the host allowing embeds
 - Regeneration is represented at the provider interface but only a lightweight local screen regeneration method exists

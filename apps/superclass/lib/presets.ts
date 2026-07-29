@@ -1,0 +1,81 @@
+import { defaultLessonRequest, type LessonRequest } from "@/types/lesson";
+
+export type DemoPreset = { id: string; label: string; detail: string; request: LessonRequest };
+
+export const demoPresets: DemoPreset[] = [
+  {
+    id: "a0-family",
+    label: "A0 family",
+    detail: "Repetition, pronunciation and complete sentences",
+    request: {
+      ...defaultLessonRequest,
+      source: "A family conversation about routines, relatives and spending time together.",
+      level: "A0",
+      practiceDensity: "repetition-heavy",
+      skillsFocus: ["speaking", "pronunciation", "vocabulary"],
+      learningGoal: "Answer basic family questions in complete sentences",
+      strengths: "Recognizing familiar words",
+      difficulties: "Confidence and vowel clarity",
+      visualStyle: "clean-classroom",
+    },
+  },
+  {
+    id: "b1-abroad",
+    label: "B1 living abroad",
+    detail: "Culture, adaptation and longer answers",
+    request: { ...defaultLessonRequest },
+  },
+  {
+    id: "b2-fintech",
+    label: "B2 fintech team",
+    detail: "Workplace language for a group class",
+    request: {
+      ...defaultLessonRequest,
+      source: "A workplace conversation about explaining a fintech product rollout and managing stakeholder concerns.",
+      level: "B2",
+      duration: 45,
+      studentType: "group",
+      interests: "technology, finance and product strategy",
+      learningGoal: "Explain trade-offs and handle questions in a fintech meeting",
+      strengths: "Technical vocabulary",
+      difficulties: "Sounding concise and natural under pressure",
+      lessonFocus: "conversation",
+      visualStyle: "corporate",
+    },
+  },
+  {
+    id: "c1-debate",
+    label: "C1 social debate",
+    detail: "Nuance, rhetoric and competing perspectives",
+    request: {
+      ...defaultLessonRequest,
+      source: "A debate about social media, attention and mental health.",
+      level: "C1",
+      interests: "psychology, technology and society",
+      learningGoal: "Qualify claims and answer strong counterarguments",
+      strengths: "Reading and abstract vocabulary",
+      difficulties: "Concise argumentation and rhetorical emphasis",
+      skillsFocus: ["speaking", "listening", "vocabulary"],
+      visualStyle: "dark-debate",
+    },
+  },
+  {
+    id: "a2-argentina",
+    label: "A2 Argentina",
+    detail: "Practical Rioplatense Spanish for travel",
+    request: {
+      ...defaultLessonRequest,
+      source: "A practical travel class about arriving in Buenos Aires, getting around and asking locals for recommendations.",
+      dialect: "rioplatense",
+      level: "A2",
+      duration: 45,
+      interests: "Argentina, food, neighborhoods and culture",
+      learningGoal: "Ask for directions and recommendations with practical vocabulary",
+      strengths: "Reading short signs and menus",
+      difficulties: "Understanding fast speech and the Rioplatense y/ll sound",
+      skillsFocus: ["speaking", "listening", "pronunciation", "vocabulary"],
+      lessonFocus: "conversation",
+      visualStyle: "travel",
+    },
+  },
+];

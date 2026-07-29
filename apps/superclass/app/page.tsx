@@ -100,7 +100,15 @@ export default function HomePage() {
             <label>Lesson focus</label>
             <div className="choice-row">
               {(["conversation", "balanced", "grammar"] as LessonStyle[]).map((item) => (
-                <button type="button" key={item} className={`choice ${lessonStyle === item ? "active" : ""}`} onClick={() => setLessonStyle(item)}>{item}</button>
+                <button
+                  type="button"
+                  key={item}
+                  className={`choice ${lessonStyle === item ? "active" : ""}`}
+                  aria-pressed={lessonStyle === item}
+                  onClick={() => setLessonStyle(item)}
+                >
+                  {item}
+                </button>
               ))}
             </div>
           </div>
@@ -109,7 +117,15 @@ export default function HomePage() {
             <label>Visual style</label>
             <div className="choice-row">
               {(["retro", "clean", "editorial"] as VisualStyle[]).map((item) => (
-                <button type="button" key={item} className={`choice ${visualStyle === item ? "active" : ""}`} onClick={() => setVisualStyle(item)}>{item}</button>
+                <button
+                  type="button"
+                  key={item}
+                  className={`choice ${visualStyle === item ? "active" : ""}`}
+                  aria-pressed={visualStyle === item}
+                  onClick={() => setVisualStyle(item)}
+                >
+                  {item}
+                </button>
               ))}
             </div>
           </div>

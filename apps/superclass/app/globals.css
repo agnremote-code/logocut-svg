@@ -138,4 +138,8 @@ h1 {
   .grid, .choice-row { grid-template-columns: 1fr; }
   .hero { margin-top: 16px; }
   .builder { padding: 18px; }
+  .nav-note { display: none; }
+  .preview { padding: 24px 18px; }
+  .preview-head { flex-direction: column; align-items: start; }
+  .preview h2 { font-size: 28px; }
 }

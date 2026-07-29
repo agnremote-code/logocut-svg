@@ -172,7 +172,7 @@ export function LessonApp() {
       )}
 
       <MarketingSections onCreate={scrollToBuilder} />
-      <footer className="site-footer"><a className="wordmark" href="#top"><span>Super</span>class</a><p>Temporary product demo · deterministic local generation · no external tracking or payments</p></footer>
+      <footer className="site-footer"><a className="wordmark" href="#top"><span>Super</span>class</a><p>Provider-backed lesson generation · no external tracking or payments</p></footer>
     </main>
   );
 }

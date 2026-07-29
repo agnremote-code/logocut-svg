@@ -336,7 +336,7 @@ function buildScreens(request: LessonRequest, topic: string) {
   return screens;
 }
 
-export const deterministicProvider: LessonProvider = {
+export const deterministicProvider: LessonProvider<LessonDraft> = {
   name: "deterministic-local",
   async generate(request, context) {
     const topic = topicFrom(request);

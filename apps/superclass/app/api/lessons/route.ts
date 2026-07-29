@@ -18,11 +18,23 @@ export async function POST(request: Request) {
     const lesson = await generateLesson(parsed.value);
     return NextResponse.json({ lesson, requestId: lesson.requestId });
   } catch (error) {
-    const status = error instanceof ProviderError && error.code === "timeout" ? 504 : 502;
+    const status =
+      error instanceof ProviderError && error.code === "timeout"
+        ? 504
+        : error instanceof ProviderError && error.code === "source-too-large"
+          ? 413
+        : error instanceof ProviderError && error.code === "configuration"
+          ? 503
+          : error instanceof ProviderError && error.code === "invalid-response"
+            ? 502
+            : 502;
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : "Lesson generation failed.",
-        requestId: crypto.randomUUID(),
+        requestId:
+          error instanceof ProviderError && "requestId" in error && typeof error.requestId === "string"
+            ? error.requestId
+            : crypto.randomUUID(),
       },
       { status },
     );

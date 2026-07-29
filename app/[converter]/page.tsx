@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ConversionUploader } from "@/components/conversion-uploader";
 import { PaidLandingAnalytics } from "@/components/paid-landing-analytics";
+import { PaidLandingSample } from "@/components/paid-landing-sample";
 import { SiteFooter } from "@/components/site-footer";
 import { UploaderTrigger } from "@/components/uploader-trigger";
 import {
@@ -113,6 +114,7 @@ export default async function ConverterPage({ params }: ConverterPageProps) {
               </div>
             </div>
             <ConversionUploader sourcePage={page.slug} compact />
+            <PaidLandingSample sourcePage={page.slug} />
             <div className="paid-uploader-trust" aria-label="Upload assurances">
               <span>PNG or JPG</span>
               <span>Under 10 MB</span>

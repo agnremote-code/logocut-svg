@@ -6,16 +6,23 @@ import {
   createPurchaseAnalyticsParams,
   sanitizeAnalyticsParams,
 } from "@/lib/analytics-payload";
+import { recordFunnelDiagnostic } from "@/lib/funnel-diagnostics";
 
 type AnalyticsEventName =
   | "homepage_view"
   | "landing_page_view"
+  | "paid_landing_view"
+  | "uploader_visible"
   | "uploader_clicked"
+  | "file_picker_clicked"
+  | "file_selected"
   | "upload_started"
   | "file_accepted"
   | "upload_completed"
   | "preview_requested"
   | "preview_generated"
+  | "sample_demo_started"
+  | "sample_preview_generated"
   | "preview_failed"
   | "preview_retry_clicked"
   | "result_page_view"
@@ -37,6 +44,7 @@ type AnalyticsEventName =
   | "paypal_opened"
   | "final_svg_generation_started"
   | "final_svg_ready"
+  | "generation_failed"
   | "purchase"
   | "marketing_capture_viewed"
   | "marketing_email_submitted"
@@ -50,6 +58,11 @@ type AnalyticsParams = {
   product_type?: OneTimeProductType;
   source_page?: string;
   source?: string;
+  medium?: string;
+  campaign?: string;
+  device_category?: "desktop" | "mobile" | "tablet";
+  has_gclid?: boolean;
+  has_utm?: boolean;
   price?: number;
   file_type?: string;
   currency?: "USD";
@@ -95,10 +108,7 @@ export function trackEvent(
   eventName: AnalyticsEventName,
   params: AnalyticsParams = {},
 ) {
-  if (
-    typeof window === "undefined" ||
-    !process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim()
-  ) {
+  if (typeof window === "undefined") {
     return false;
   }
 
@@ -106,6 +116,12 @@ export function trackEvent(
     ...getCurrentAttribution(),
     ...params,
   });
+
+  recordFunnelDiagnostic(eventName, cleanParams);
+
+  if (!process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim()) {
+    return false;
+  }
 
   if (typeof window.gtag === "function") {
     window.gtag("event", eventName, cleanParams);

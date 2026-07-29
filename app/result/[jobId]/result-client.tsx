@@ -57,6 +57,7 @@ export default function ResultClient({ jobId }: ResultClientProps) {
   const resultViewTrackedRef = useRef(false);
   const previewDisplayedTrackedRef = useRef(false);
   const checkoutViewTrackedRef = useRef(false);
+  const generationFailedTrackedRef = useRef(false);
   const [job, setJob] = useState<ClientJobRecord | null>(null);
   const [serverJob, setServerJob] = useState<JobSummary | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -480,6 +481,20 @@ export default function ResultClient({ jobId }: ResultClientProps) {
   const unlockLabel = `Unlock with PayPal - ${activeProduct?.price ?? "$5"}`;
   const finalGenerationFailed =
     paymentStatus === "paid" && !isSvgReady && Boolean(resultError);
+
+  useEffect(() => {
+    if (!finalGenerationFailed || generationFailedTrackedRef.current) {
+      return;
+    }
+
+    generationFailedTrackedRef.current = true;
+    trackEvent("generation_failed", {
+      cut_type: activeCutType,
+      product_type: productType,
+      source_page: "result_page",
+      failure_reason: "final",
+    });
+  }, [activeCutType, finalGenerationFailed, productType]);
 
   if (isLoading) {
     return (

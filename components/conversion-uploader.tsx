@@ -79,6 +79,10 @@ export function ConversionUploader({
         source_page: customEvent.detail?.sourcePage ?? sourcePage,
         cut_type: customEvent.detail?.cutType,
       });
+      trackEvent("file_picker_clicked", {
+        source_page: customEvent.detail?.sourcePage ?? sourcePage,
+        cut_type: customEvent.detail?.cutType,
+      });
       uploaderRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
       uploaderRef.current?.focus();
       fileInputRef.current?.click();
@@ -107,6 +111,10 @@ export function ConversionUploader({
       source_page: lastSourcePage,
       cut_type: selectedCut,
     });
+    trackEvent("file_picker_clicked", {
+      source_page: lastSourcePage,
+      cut_type: selectedCut,
+    });
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -114,7 +122,16 @@ export function ConversionUploader({
     }
   };
 
-  const validateAndSetFile = (file: File) => {
+  const validateAndSetFile = (
+    file: File,
+    selectionSource: "file_picker" | "drag_drop",
+  ) => {
+    trackEvent("file_selected", {
+      source_page: lastSourcePage,
+      cut_type: selectedCut,
+      file_type: file.type,
+      source: selectionSource,
+    });
     trackEvent("upload_started", {
       source_page: lastSourcePage,
       cut_type: selectedCut,
@@ -153,7 +170,7 @@ export function ConversionUploader({
     const file = event.target.files?.[0];
 
     if (file) {
-      validateAndSetFile(file);
+      validateAndSetFile(file, "file_picker");
     }
   };
 
@@ -164,7 +181,7 @@ export function ConversionUploader({
     const file = event.dataTransfer.files?.[0];
 
     if (file) {
-      validateAndSetFile(file);
+      validateAndSetFile(file, "drag_drop");
     }
   };
 
@@ -262,6 +279,11 @@ export function ConversionUploader({
         source_page: lastSourcePage,
         cut_type: selectedCut,
         preview_failure_code: failureCode,
+      });
+      trackEvent("generation_failed", {
+        source_page: lastSourcePage,
+        cut_type: selectedCut,
+        failure_reason: "preview",
       });
       setIsSubmitting(false);
     }

@@ -681,6 +681,7 @@ summary:focus-visible,
 /* Conversion-first paid search landing pages */
 .paid-landing-page {
   min-height: 100vh;
+  overflow-x: clip;
   background: #f7f8f5;
   color: #111815;
   font-family: var(--font-geist-sans), Arial, sans-serif;
@@ -758,6 +759,7 @@ summary:focus-visible,
 }
 
 .paid-landing-copy {
+  min-width: 0;
   max-width: 590px;
 }
 
@@ -856,6 +858,8 @@ summary:focus-visible,
 }
 
 .paid-landing-uploader {
+  min-width: 0;
+  max-width: 100%;
   border: 1px solid #dce2dd;
   border-radius: 20px;
   background: #fff;
@@ -944,6 +948,156 @@ summary:focus-visible,
   content: "✓";
   margin-right: 5px;
   color: #16834b;
+}
+
+.paid-sample-demo {
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px solid #e1e6e2;
+}
+
+.paid-sample-heading {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.paid-sample-heading > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.paid-sample-heading > div > span {
+  color: #16834b;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+}
+
+.paid-sample-heading strong {
+  overflow: hidden;
+  color: #27322b;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.paid-sample-heading button {
+  min-height: 34px;
+  flex: 0 0 auto;
+  border: 1px solid #b9d4c2;
+  border-radius: 8px;
+  background: #f3faf5;
+  padding: 0 12px;
+  color: #11683c;
+  font-size: 11px;
+  font-weight: 800;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.paid-sample-heading button:hover {
+  border-color: #16834b;
+  background: #eaf7ee;
+  transform: translateY(-1px);
+}
+
+.paid-sample-heading button:focus-visible {
+  outline: 3px solid rgba(22, 131, 75, 0.2);
+  outline-offset: 2px;
+}
+
+.paid-sample-ready {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #eaf7ee;
+  padding: 6px 9px;
+  color: #11683c;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.paid-sample-comparison {
+  display: grid;
+  margin-top: 10px;
+  grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+
+.paid-sample-comparison figure {
+  position: relative;
+  display: grid;
+  height: 74px;
+  margin: 0;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #e0e5e1;
+  border-radius: 9px;
+  background: #f7f8f5;
+}
+
+.paid-sample-comparison img {
+  width: 100%;
+  height: 100%;
+  padding: 8px;
+  object-fit: contain;
+}
+
+.paid-sample-comparison figcaption {
+  position: absolute;
+  bottom: 5px;
+  left: 6px;
+  border-radius: 5px;
+  background: rgba(17, 24, 21, 0.82);
+  padding: 3px 5px;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.paid-sample-arrow {
+  color: #16834b;
+  font-size: 16px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.paid-sample-placeholder {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  background:
+    linear-gradient(135deg, transparent 46%, #e7ebe8 46%, #e7ebe8 54%, transparent 54%),
+    #f4f6f3;
+}
+
+.paid-sample-placeholder span {
+  display: grid;
+  width: 36px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid #cad3cc;
+  border-radius: 6px;
+  background: #fff;
+  color: #7b867e;
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.paid-sample-note {
+  margin: 8px 0 0;
+  color: #69736c;
+  font-size: 10px;
+  line-height: 1.4;
+  text-align: center;
 }
 
 .uploader-pack-note {
@@ -1077,6 +1231,7 @@ summary:focus-visible,
 
   .paid-landing-copy h1 {
     font-size: 38px;
+    overflow-wrap: anywhere;
   }
 
   .paid-landing-subheadline {
@@ -1115,14 +1270,41 @@ summary:focus-visible,
   }
 
   .paid-landing-uploader .uploader-dropzone {
+    width: 100%;
+    min-width: 0;
     min-height: 218px;
     padding: 22px 14px;
+  }
+
+  .paid-landing-uploader .uploader-title,
+  .paid-landing-uploader .uploader-help {
+    max-width: 100%;
+    overflow-wrap: anywhere;
   }
 
   .paid-uploader-trust {
     justify-content: space-between;
     gap: 6px;
     font-size: 9px;
+  }
+
+  .paid-sample-heading {
+    align-items: flex-start;
+  }
+
+  .paid-sample-heading strong {
+    max-width: 170px;
+    white-space: normal;
+  }
+
+  .paid-sample-heading button {
+    max-width: 135px;
+    padding: 5px 9px;
+    line-height: 1.25;
+  }
+
+  .paid-sample-comparison figure {
+    height: 68px;
   }
 
   .paid-how-it-works {

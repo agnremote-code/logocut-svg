@@ -26,12 +26,12 @@ const baseUrl = "https://www.logocutsvg.com";
 export const landingPages: LandingPageConfig[] = [
   {
     slug: "png-to-svg",
-    title: "Convert PNG to SVG Online | LogoCut SVG",
+    title: "PNG to SVG Converter for Cricut | Free Preview",
     description:
-      "Convert PNG images to SVG online with a free watermarked preview before payment. Single-color SVG is $5 and layered SVG is $9.",
-    h1: "Convert PNG to SVG Online",
+      "Convert PNG or JPG images to Cricut-ready SVG files. See a free watermarked preview before paying, then unlock one clean SVG or both versions.",
+    h1: "Convert PNG to SVG for Cricut",
     subheadline:
-      "Upload a PNG, preview the SVG for free, and unlock the clean file only when the result works for your project.",
+      "Upload your image and see a free SVG preview first. Pay only when the conversion looks right for your project.",
     intro:
       "PNG files are useful for sharing artwork, but they are still made from pixels. When a PNG needs to become a cut file, the shape usually needs to be traced into paths first. LogoCut SVG gives you a quick way to test that conversion before you spend anything.",
     sections: [

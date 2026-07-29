@@ -55,6 +55,7 @@ export default function ResultClient({ jobId }: ResultClientProps) {
   const router = useRouter();
   const paypalButtonContainerRef = useRef<HTMLDivElement | null>(null);
   const resultViewTrackedRef = useRef(false);
+  const previewDisplayedTrackedRef = useRef(false);
   const checkoutViewTrackedRef = useRef(false);
   const [job, setJob] = useState<ClientJobRecord | null>(null);
   const [serverJob, setServerJob] = useState<JobSummary | null>(null);
@@ -301,6 +302,18 @@ export default function ResultClient({ jobId }: ResultClientProps) {
       createOrder: async () => {
         setIsStartingCheckout(true);
         setResultError("");
+        trackEvent("checkout_clicked", {
+          cut_type: activeCutType,
+          product_type: productType,
+          source_page: "result_page",
+          value:
+            productType === "complete_pack"
+              ? 12
+              : productType === "layered_svg"
+                ? 9
+                : 5,
+          currency: "USD",
+        });
 
         const response = await fetch("/api/paypal/orders", {
           method: "POST",
@@ -322,6 +335,18 @@ export default function ResultClient({ jobId }: ResultClientProps) {
         }
 
         trackEvent("paypal_order_created", {
+          cut_type: activeCutType,
+          product_type: productType,
+          source_page: "result_page",
+          value:
+            productType === "complete_pack"
+              ? 12
+              : productType === "layered_svg"
+                ? 9
+                : 5,
+          currency: "USD",
+        });
+        trackEvent("paypal_opened", {
           cut_type: activeCutType,
           product_type: productType,
           source_page: "result_page",
@@ -537,7 +562,17 @@ export default function ResultClient({ jobId }: ResultClientProps) {
               title={displayFileName}
               controlsEnabled={isSvgReady || previewAssetReady}
               onResultLoad={() => {
-                if (!isSvgReady) setPreviewAssetReady(true);
+                if (!isSvgReady) {
+                  setPreviewAssetReady(true);
+                  if (!previewDisplayedTrackedRef.current) {
+                    previewDisplayedTrackedRef.current = true;
+                    trackEvent("preview_displayed", {
+                      cut_type: activeCutType,
+                      product_type: productType,
+                      source_page: "result_page",
+                    });
+                  }
+                }
               }}
               onResultError={() => {
                 if (!isSvgReady) {

@@ -9,8 +9,10 @@ import {
 
 type AnalyticsEventName =
   | "homepage_view"
+  | "landing_page_view"
   | "uploader_clicked"
   | "upload_started"
+  | "file_accepted"
   | "upload_completed"
   | "preview_requested"
   | "preview_generated"
@@ -29,7 +31,10 @@ type AnalyticsEventName =
   | "preview_zoom_used"
   | "preview_regenerated"
   | "preview_displayed"
+  | "pricing_viewed"
   | "checkout_viewed"
+  | "checkout_clicked"
+  | "paypal_opened"
   | "final_svg_generation_started"
   | "final_svg_ready"
   | "purchase"

@@ -678,6 +678,469 @@ summary:focus-visible,
   margin-top: 28px;
 }
 
+/* Conversion-first paid search landing pages */
+.paid-landing-page {
+  min-height: 100vh;
+  background: #f7f8f5;
+  color: #111815;
+  font-family: var(--font-geist-sans), Arial, sans-serif;
+}
+
+.paid-landing-nav {
+  display: flex;
+  width: 100%;
+  max-width: 1240px;
+  height: 64px;
+  margin: 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+}
+
+.paid-landing-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #111815;
+  font-size: 15px;
+  font-weight: 760;
+}
+
+.paid-landing-brand > span {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 8px;
+  background: #111815;
+  color: #fff;
+  font-size: 11px;
+}
+
+.paid-landing-home-link {
+  color: #536159;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.paid-landing-home-link:hover {
+  color: #16834b;
+}
+
+.paid-landing-announcement {
+  border-top: 1px solid #e1e5e1;
+  border-bottom: 1px solid #e1e5e1;
+  background: #fff;
+  padding: 9px 20px;
+  color: #536159;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.paid-landing-announcement span {
+  margin: 0 8px;
+  color: #9da7a0;
+}
+
+.paid-landing-hero {
+  padding: 44px 24px 54px;
+}
+
+.paid-landing-hero-inner {
+  display: grid;
+  width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
+  grid-template-columns: minmax(0, 0.88fr) minmax(440px, 1.12fr);
+  gap: 54px;
+  align-items: center;
+}
+
+.paid-landing-copy {
+  max-width: 590px;
+}
+
+.paid-landing-eyebrow,
+.paid-section-label {
+  margin: 0 0 14px;
+  color: #16834b;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.paid-landing-copy h1 {
+  margin: 0;
+  color: #111815;
+  font-size: clamp(44px, 5vw, 66px);
+  font-weight: 770;
+  letter-spacing: -0.04em;
+  line-height: 1.01;
+}
+
+.paid-landing-subheadline {
+  max-width: 560px;
+  margin: 20px 0 0;
+  color: #59635d;
+  font-size: 18px;
+  line-height: 1.55;
+}
+
+.paid-price-row {
+  display: grid;
+  margin-top: 24px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid #d9dfda;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.paid-price-row > div {
+  position: relative;
+  display: grid;
+  min-height: 78px;
+  align-content: center;
+  padding: 12px 15px;
+  border-right: 1px solid #e1e6e2;
+}
+
+.paid-price-row > div:last-child {
+  border-right: 0;
+}
+
+.paid-price-row span {
+  color: #667069;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.paid-price-row strong {
+  margin-top: 3px;
+  color: #111815;
+  font-size: 23px;
+  line-height: 1;
+}
+
+.paid-price-row .paid-price-best {
+  background: #eef8f1;
+}
+
+.paid-price-best small {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  color: #11683c;
+  font-size: 9px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.paid-landing-benefits {
+  display: grid;
+  gap: 9px;
+  margin: 22px 0 0;
+  padding: 0;
+  color: #445048;
+  font-size: 14px;
+  font-weight: 650;
+  list-style: none;
+}
+
+.paid-landing-benefits li::before {
+  content: "✓";
+  margin-right: 9px;
+  color: #16834b;
+  font-weight: 850;
+}
+
+.paid-landing-uploader {
+  border: 1px solid #dce2dd;
+  border-radius: 20px;
+  background: #fff;
+  padding: 16px;
+  box-shadow: 0 24px 64px rgba(20, 42, 28, 0.1);
+}
+
+.paid-uploader-heading {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin: 1px 2px 13px;
+}
+
+.paid-uploader-heading > span {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 8px;
+  background: #eef8f1;
+  color: #11683c;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.paid-uploader-heading > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.paid-uploader-heading strong {
+  font-size: 15px;
+}
+
+.paid-uploader-heading small {
+  color: #69736c;
+  font-size: 12px;
+}
+
+.paid-landing-uploader .uploader-dropzone {
+  min-height: 230px;
+  border-radius: 14px;
+  box-shadow: none;
+}
+
+.paid-landing-uploader .uploader-selected {
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: none;
+}
+
+.paid-landing-uploader .uploader-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+}
+
+.paid-landing-uploader .uploader-title {
+  margin-top: 14px;
+  font-size: 23px;
+}
+
+.paid-landing-uploader .uploader-help {
+  margin-top: 7px;
+  font-size: 14px;
+}
+
+.paid-landing-uploader .uploader-button {
+  margin-top: 18px;
+}
+
+.paid-uploader-trust {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  padding: 13px 5px 0;
+  color: #68726b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.paid-uploader-trust span::before {
+  content: "✓";
+  margin-right: 5px;
+  color: #16834b;
+}
+
+.uploader-pack-note {
+  margin: -2px 0 0;
+  border-radius: 9px;
+  background: #f4f8f4;
+  padding: 10px 12px;
+  color: #4f5b53;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.paid-how-it-works {
+  display: grid;
+  width: calc(100% - 48px);
+  max-width: 1120px;
+  margin: 0 auto;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid #dce2dd;
+  border-bottom: 1px solid #dce2dd;
+}
+
+.paid-how-it-works > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 24px;
+  border-right: 1px solid #dce2dd;
+}
+
+.paid-how-it-works > div:last-child {
+  border-right: 0;
+}
+
+.paid-how-it-works > div > span {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #b9d4c2;
+  border-radius: 50%;
+  color: #11683c;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.paid-how-it-works p {
+  display: flex;
+  margin: 0;
+  flex-direction: column;
+  gap: 3px;
+  color: #667069;
+  font-size: 12px;
+}
+
+.paid-how-it-works strong {
+  color: #111815;
+  font-size: 14px;
+}
+
+.paid-landing-details {
+  background: #fff;
+}
+
+.paid-intro-section {
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e9e6;
+}
+
+@media (max-width: 900px) {
+  .paid-landing-hero {
+    padding: 34px 20px 42px;
+  }
+
+  .paid-landing-hero-inner {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+
+  .paid-landing-copy {
+    max-width: none;
+    text-align: center;
+  }
+
+  .paid-landing-copy h1 {
+    font-size: 44px;
+  }
+
+  .paid-landing-subheadline {
+    margin-right: auto;
+    margin-left: auto;
+  }
+
+  .paid-landing-benefits {
+    width: fit-content;
+    margin-right: auto;
+    margin-left: auto;
+    text-align: left;
+  }
+
+  .paid-how-it-works {
+    width: calc(100% - 40px);
+  }
+
+  .paid-how-it-works > div {
+    padding: 17px 14px;
+  }
+}
+
+@media (max-width: 620px) {
+  .paid-landing-nav {
+    height: 58px;
+    padding: 0 16px;
+  }
+
+  .paid-landing-announcement {
+    padding: 8px 12px;
+    font-size: 10px;
+  }
+
+  .paid-landing-announcement span {
+    margin: 0 4px;
+  }
+
+  .paid-landing-hero {
+    padding: 26px 16px 34px;
+  }
+
+  .paid-landing-copy h1 {
+    font-size: 38px;
+  }
+
+  .paid-landing-subheadline {
+    margin-top: 15px;
+    font-size: 16px;
+  }
+
+  .paid-price-row {
+    margin-top: 20px;
+  }
+
+  .paid-price-row > div {
+    min-height: 72px;
+    padding: 10px;
+  }
+
+  .paid-price-row span {
+    font-size: 10px;
+  }
+
+  .paid-price-row strong {
+    font-size: 20px;
+  }
+
+  .paid-price-best small {
+    display: none;
+  }
+
+  .paid-landing-benefits {
+    display: none;
+  }
+
+  .paid-landing-uploader {
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .paid-landing-uploader .uploader-dropzone {
+    min-height: 218px;
+    padding: 22px 14px;
+  }
+
+  .paid-uploader-trust {
+    justify-content: space-between;
+    gap: 6px;
+    font-size: 9px;
+  }
+
+  .paid-how-it-works {
+    width: 100%;
+    grid-template-columns: 1fr;
+  }
+
+  .paid-how-it-works > div {
+    border-right: 0;
+    border-bottom: 1px solid #dce2dd;
+    padding: 15px 20px;
+  }
+
+  .paid-how-it-works > div:last-child {
+    border-bottom: 0;
+  }
+}
+
 @media (max-width: 900px) {
   .hero-section {
     padding: 44px 20px 48px;

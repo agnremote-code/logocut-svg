@@ -28,6 +28,30 @@ type OpenUploaderEvent = CustomEvent<{
   cutType?: CutType;
 }>;
 
+type PreviewFailureCode =
+  | "network_error"
+  | "missing_credentials"
+  | "vectorizer_error"
+  | "invalid_input"
+  | "unknown_error";
+
+const previewFailureMessages: Record<PreviewFailureCode, string> = {
+  network_error: "The preview service could not be reached. Please retry.",
+  missing_credentials: "Preview service is temporarily unavailable.",
+  vectorizer_error: "We couldn’t generate this preview right now. Please retry.",
+  invalid_input: "This image could not be processed. Try another PNG or JPG.",
+  unknown_error: "We couldn’t generate this preview right now. Please retry.",
+};
+
+function isPreviewFailureCode(value: unknown): value is PreviewFailureCode {
+  return (
+    value === "network_error" ||
+    value === "missing_credentials" ||
+    value === "vectorizer_error" ||
+    value === "invalid_input"
+  );
+}
+
 export function ConversionUploader({
   sourcePage,
   compact = false,
@@ -113,6 +137,11 @@ export function ConversionUploader({
 
     setError("");
     setSelectedFile(file);
+    trackEvent("file_accepted", {
+      source_page: lastSourcePage,
+      cut_type: selectedCut,
+      file_type: file.type,
+    });
     trackEvent("upload_completed", {
       source_page: lastSourcePage,
       cut_type: selectedCut,
@@ -181,10 +210,15 @@ export function ConversionUploader({
       const payload = (await response.json()) as {
         job?: JobSummary;
         error?: string;
+        code?: unknown;
       };
 
       if (!response.ok || !payload.job) {
-        throw new Error(payload.error ?? "Could not start processing.");
+        throw {
+          code: isPreviewFailureCode(payload.code)
+            ? payload.code
+            : "unknown_error",
+        };
       }
 
       await saveClientJob({
@@ -198,13 +232,15 @@ export function ConversionUploader({
       );
       const previewPayload = (await previewResponse.json()) as {
         error?: string;
+        code?: unknown;
       };
 
       if (!previewResponse.ok) {
-        throw new Error(
-          previewPayload.error ??
-            "We couldn't create a preview from this image. Try a clearer logo.",
-        );
+        throw {
+          code: isPreviewFailureCode(previewPayload.code)
+            ? previewPayload.code
+            : "unknown_error",
+        };
       }
 
       trackEvent("preview_generated", {
@@ -214,11 +250,19 @@ export function ConversionUploader({
       });
       window.location.href = `/result/${payload.job.id}`;
     } catch (processingError) {
-      setError(
-        processingError instanceof Error
-          ? processingError.message
-          : "We couldn't create a preview from this image. Try a clearer logo.",
-      );
+      const failureCode =
+        typeof processingError === "object" &&
+        processingError !== null &&
+        "code" in processingError &&
+        isPreviewFailureCode(processingError.code)
+          ? processingError.code
+          : "unknown_error";
+      setError(previewFailureMessages[failureCode]);
+      trackEvent("preview_failed", {
+        source_page: lastSourcePage,
+        cut_type: selectedCut,
+        preview_failure_code: failureCode,
+      });
       setIsSubmitting(false);
     }
   };
@@ -268,9 +312,9 @@ export function ConversionUploader({
               <path d="M20 16.5V19a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2.5" />
             </svg>
           </span>
-          <span className="uploader-title">Drop your image here</span>
+          <span className="uploader-title">Drop your PNG or JPG here</span>
           <span className="uploader-help">
-            PNG, JPG or JPEG · Maximum 10 MB
+            Or choose a file · Maximum 10 MB
           </span>
           <button
             className="primary-button uploader-button"
@@ -280,7 +324,7 @@ export function ConversionUploader({
               openFilePicker();
             }}
           >
-            Generate Free SVG Preview
+            Choose PNG or JPG
           </button>
         </div>
       ) : (
@@ -342,13 +386,20 @@ export function ConversionUploader({
             })}
           </div>
 
+          <p className="uploader-pack-note">
+            Want both versions? The Complete SVG Pack is available after your
+            free preview for $12.
+          </p>
+
           <button
             className="primary-button h-14 w-full disabled:cursor-not-allowed disabled:bg-[#86A58F]"
             type="button"
             disabled={isSubmitting}
             onClick={handleStartProcessing}
           >
-            {isSubmitting ? "Creating your preview..." : "Generate Free SVG Preview"}
+            {isSubmitting
+              ? "Creating your preview..."
+              : "Generate Free SVG Preview"}
           </button>
         </div>
       )}

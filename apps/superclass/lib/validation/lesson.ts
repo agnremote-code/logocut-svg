@@ -1,5 +1,7 @@
 import {
   lessonFocuses,
+  languageIds,
+  languageModes,
   lessonLevels,
   skills,
   sourceModes,
@@ -8,6 +10,8 @@ import {
   type LessonRequest,
 } from "@/types/lesson";
 import { isValidLessonDuration, lessonScreenRange } from "@/lib/lesson/duration";
+import { normalizeLanguageId } from "@/lib/lesson/language";
+import { validateTopicAndLanguage } from "@/lib/lesson/quality";
 
 export type ValidationResult<T> = { ok: true; value: T } | { ok: false; errors: string[] };
 
@@ -59,9 +63,13 @@ export function validateLessonRequest(input: unknown): ValidationResult<LessonRe
   if (sourceMode === "video") {
     const video = validateVideoUrl(videoUrl);
     if (!video.ok) errors.push(...video.errors);
-    if (transcript.length < 12) errors.push("Paste a transcript or notes for this video so the lesson stays source-grounded.");
+    if (transcript.length < 12) errors.push("Import captions or upload the video/audio before building this source-grounded lesson.");
   }
-  if (!isString(value.language) || value.language.trim().length < 2) errors.push("Choose the language being taught.");
+  const targetLanguage = normalizeLanguageId(value.language);
+  const supportLanguage = normalizeLanguageId(value.supportLanguage ?? "en");
+  if (!targetLanguage || !includes(languageIds, targetLanguage)) errors.push("Choose a valid target language.");
+  if (!supportLanguage || !includes(languageIds, supportLanguage)) errors.push("Choose a valid support language.");
+  if (!includes(languageModes, value.languageMode ?? "smart")) errors.push("Choose a valid lesson language mode.");
   if (!includes(lessonLevels, value.level)) errors.push("Choose a valid CEFR level.");
   if (!isValidLessonDuration(value.duration)) errors.push("Choose a lesson duration between 20 and 120 minutes.");
   if (value.studentType !== "individual" && value.studentType !== "group") errors.push("Choose an individual or group class.");
@@ -83,7 +91,11 @@ export function validateLessonRequest(input: unknown): ValidationResult<LessonRe
       source,
       videoUrl,
       transcript,
-      language: String(value.language).trim(),
+      language: targetLanguage as LessonRequest["language"],
+      customLanguage: isString(value.customLanguage) ? value.customLanguage.trim().slice(0, 80) : "",
+      supportLanguage: supportLanguage as LessonRequest["supportLanguage"],
+      customSupportLanguage: isString(value.customSupportLanguage) ? value.customSupportLanguage.trim().slice(0, 80) : "",
+      languageMode: (value.languageMode ?? "smart") as LessonRequest["languageMode"],
       dialect: value.dialect as LessonRequest["dialect"],
       customDialect: isString(value.customDialect) ? value.customDialect.trim() : "",
       level: value.level as LessonRequest["level"],
@@ -168,6 +180,7 @@ export function validateLessonDraft(input: unknown, request?: LessonRequest): Va
     if (!isStringArray(screen.answers)) errors.push(`Answers are invalid on ${screen.id}.`);
     if (!isStringArray(screen.teacherNotes)) errors.push(`Teacher notes are invalid on ${screen.id}.`);
     if (!Number.isInteger(screen.timing) || screen.timing < 0) errors.push(`Timing is invalid on ${screen.id}.`);
+    if (!isString(screen.layout)) errors.push(`Layout is invalid on ${screen.id}.`);
     if (screen.sourceExcerpt !== undefined && !isString(screen.sourceExcerpt)) errors.push(`Source excerpt is invalid on ${screen.id}.`);
     if (screen.videoId !== undefined && !isString(screen.videoId)) errors.push(`Video ID is invalid on ${screen.id}.`);
     if (Array.isArray(screen.prompts) && screen.prompts.length > rule.questions) errors.push(`Too many prompts on ${screen.id}.`);
@@ -199,6 +212,8 @@ export function validateLessonDraft(input: unknown, request?: LessonRequest): Va
         errors.push("Source comprehension screens require answer evidence.");
       }
     }
+    const quality = validateTopicAndLanguage(typed, request);
+    errors.push(...quality.errors);
   }
   return errors.length ? { ok: false, errors } : { ok: true, value: typed };
 }

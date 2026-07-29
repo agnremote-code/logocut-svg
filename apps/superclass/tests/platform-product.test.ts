@@ -68,10 +68,10 @@ test("profiles support create, update, duplicate, delete, association and privat
 });
 
 test("recent profile vocabulary is deprioritized in a new lesson", async () => {
-  const lesson = await deterministicProvider.generate({ ...defaultLessonRequest, recentVocabulary: ["local insight", "get around"] }, context);
+  const lesson = await deterministicProvider.generate({ ...defaultLessonRequest, recentVocabulary: ["una idea clave", "desde mi experiencia"] }, context);
   const terms = lesson.screens.flatMap((screen) => screen.vocabulary.map((item) => item.term));
-  assert.ok(terms.includes("worth the detour"));
-  assert.ok(terms.indexOf("worth the detour") < terms.indexOf("local insight"));
+  assert.ok(terms.includes("un punto de vista"));
+  assert.equal(terms.includes("una idea clave"), false);
 });
 
 test("post-class tools produce a student-ready recap without private teacher notes", async () => {

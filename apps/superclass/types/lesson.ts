@@ -4,6 +4,28 @@ export const sourceModes = ["idea", "text", "video"] as const;
 export const lessonFocuses = ["conversation", "balanced", "grammar-focused", "pronunciation-focused", "source-comprehension"] as const;
 export const visualStyles = ["retro-game", "clean-classroom", "editorial", "dark-debate", "travel", "corporate"] as const;
 export const skills = ["speaking", "listening", "pronunciation", "vocabulary", "grammar", "reading"] as const;
+export const languageIds = ["en", "es", "fr", "pt", "de", "it", "ja", "ko", "zh", "ar", "ru", "nl", "other"] as const;
+export const languageModes = ["smart", "target-only", "bilingual", "support-heavy"] as const;
+export const screenLayouts = [
+  "cover",
+  "objective",
+  "comparison",
+  "rule-cards",
+  "example-gallery",
+  "vocabulary-cards",
+  "illustrated-context",
+  "sentence-builder",
+  "multiple-choice",
+  "sorting",
+  "fill-gap",
+  "error-correction",
+  "dialogue",
+  "pronunciation",
+  "personal-prompts",
+  "debate-cards",
+  "recap",
+  "homework",
+] as const;
 
 export type LessonLevel = (typeof lessonLevels)[number];
 export type LessonDuration = number;
@@ -11,6 +33,9 @@ export type SourceMode = (typeof sourceModes)[number];
 export type LessonFocus = (typeof lessonFocuses)[number];
 export type VisualStyle = (typeof visualStyles)[number];
 export type SkillFocus = (typeof skills)[number];
+export type LanguageId = (typeof languageIds)[number];
+export type LanguageMode = (typeof languageModes)[number];
+export type ScreenLayout = (typeof screenLayouts)[number];
 export type StudentType = "individual" | "group";
 export type PracticeDensity = "compact" | "standard" | "repetition-heavy";
 export type Dialect = "neutral" | "rioplatense" | "spain" | "mexican" | "custom";
@@ -21,7 +46,11 @@ export type LessonRequest = {
   source: string;
   videoUrl: string;
   transcript: string;
-  language: string;
+  language: LanguageId;
+  customLanguage: string;
+  supportLanguage: LanguageId;
+  customSupportLanguage: string;
+  languageMode: LanguageMode;
   dialect: Dialect;
   customDialect: string;
   level: LessonLevel;
@@ -123,6 +152,7 @@ export type LessonScreen = {
   answers: string[];
   teacherNotes: string[];
   timing: number;
+  layout: ScreenLayout;
   sourceExcerpt?: string;
   videoId?: string;
 };
@@ -154,7 +184,11 @@ export const defaultLessonRequest: LessonRequest = {
   source: "A B1 conversation class about living abroad and adapting to a new culture.",
   videoUrl: "",
   transcript: "",
-  language: "Spanish",
+  language: "es",
+  customLanguage: "",
+  supportLanguage: "en",
+  customSupportLanguage: "",
+  languageMode: "smart",
   dialect: "neutral",
   customDialect: "",
   level: "B1",

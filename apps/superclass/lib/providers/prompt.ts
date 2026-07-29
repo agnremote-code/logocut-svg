@@ -1,9 +1,11 @@
 import { lessonScreenRange } from "@/lib/lesson/duration";
+import { createLessonPlan } from "@/lib/lesson/planning";
 import type { LessonRequest } from "@/types/lesson";
 
-export function buildLessonPrompt(request: LessonRequest) {
+export function buildLessonPrompt(request: LessonRequest, repairErrors: string[] = []) {
   const activeSource = request.sourceMode === "video" ? request.transcript : request.source;
   const [minimumScreens, maximumScreens] = lessonScreenRange(request.duration);
+  const plan = createLessonPlan(request);
   return [
     "Create a complete, classroom-ready language lesson as JSON matching the supplied schema.",
     "Hard requirements:",
@@ -17,13 +19,23 @@ export function buildLessonPrompt(request: LessonRequest) {
     "- Keep every title under 68 characters (cover under 90), body under 360 characters, and at most four prompts per screen.",
     "- Use unique screen IDs and avoid duplicate questions.",
     "- Return JSON only through the structured response schema.",
+    `- Follow this validated pedagogical plan exactly: ${JSON.stringify(plan)}.`,
+    `- Keep student-facing content primarily in ${plan.language.targetLabel}; ${plan.language.supportLabel} is support only under ${plan.language.mode} mode.`,
+    `- Target approximately ${Math.round(plan.language.targetRatio * 100)}% target-language instructional exposure.`,
+    "- Never reuse unrelated content from a preset, previous lesson, or example.",
+    "- Use at least six materially different layout values for lessons of 60 minutes or longer.",
+    ...(repairErrors.length ? ["", "This is the single repair attempt. Correct every validation failure without changing the topic or settings:", ...repairErrors.map((error) => `- ${error}`)] : []),
     "",
     "Lesson settings:",
     JSON.stringify({
       sourceMode: request.sourceMode,
       source: activeSource,
       videoUrl: request.videoUrl,
-      language: request.language,
+      targetLanguage: plan.language.targetLabel,
+      targetLanguageId: request.language,
+      supportLanguage: plan.language.supportLabel,
+      supportLanguageId: request.supportLanguage,
+      languageMode: plan.language.mode,
       dialect: request.dialect === "custom" ? request.customDialect : request.dialect,
       level: request.level,
       duration: request.duration,

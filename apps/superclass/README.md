@@ -22,14 +22,14 @@ npm run build
 ## Product capabilities
 
 - Idea, text/transcript, and video source modes
-- YouTube ID parsing and privacy-enhanced embedding
-- Explicit transcript requirement for source-grounded video lessons
+- Searchable target- and support-language controls with stable language IDs and explicit smart, target-only, bilingual and support-heavy modes
+- YouTube URL normalization, automatic caption-provider flow, editable imported transcripts, media-upload transcription fallback, and privacy-enhanced embedding
 - A0–C2; 25, 30, 45, 50, 60 and 90-minute presets; custom 20–120-minute durations; individual/group, dialect, skills, focus and practice-density controls
 - Local-only student profiles with teaching preferences, lesson continuity, topic/vocabulary history and repetition avoidance
 - Five anonymized demo presets
-- Deterministic local lesson provider with level-specific pedagogy and duration-specific screen density
-- Shared request and lesson validation with content limits and duplicate detection
-- Lesson overview, slide strip, edit controls, teacher notes and a software-style Lesson Player with modules, progress, activity state, teacher/student privacy, fullscreen and keyboard navigation
+- Plan-first deterministic and AI lesson providers with topic locking, a language-output contract, specialized grammar planning, level-specific pedagogy and duration-specific screen density
+- Shared request and lesson validation with content limits, duplicate detection, topic-coverage scoring, wrong-language detection, layout variety and one structured provider repair
+- Lesson overview, slide strip, edit controls, teacher notes and a true 16:9 Lesson Player with varied reusable layouts, modules, progress, activity state, teacher/student privacy, fullscreen and keyboard navigation
 - Server-generated Student Workbook and Teacher Pack PDFs with distinct content, page numbering, writing space and reliable Spanish text support
 - Post-class recap, corrections, vocabulary, grammar, pronunciation, homework, next-class suggestion and copy-ready student message
 - Latest/recent local draft persistence, restore, duplicate, and delete
@@ -41,13 +41,28 @@ npm run build
 
 - `types/` — stable request, screen, and lesson contracts
 - `lib/validation/` — shared request, URL, and generated-content validation
-- `lib/providers/` — server-only provider interface, timeout/error boundary, and deterministic demo provider
+- `lib/providers/` — server-only provider interface, plan-aware prompts, timeout/error boundary, deterministic provider and one-attempt structured repair
+- `lib/lesson/` — pedagogical planning, language contracts, quality scoring, deterministic topic templates and teacher/student projection
+- `lib/transcripts/` — caption/import and uploaded-media transcription provider interface
 - `lib/storage/` — versioned local draft serialization and browser store
 - `lib/pdf/` — serverless `pdf-lib` document generation; no browser or Chromium runtime
 - `lib/analytics/` — safe categorical event contract and disabled default provider
-- `lib/lesson/` — teacher/student projection helpers
 - `components/` — focused builder, workspace, classroom, and marketing UI
 - `app/api/lessons` — validated server route and request ID boundary
+- `app/api/transcripts` — normalized caption import and uploaded-media transcription boundaries
+
+### Generation pipeline
+
+Every provider receives the same validated `LessonPlan` before it creates screens:
+
+1. **Plan** — locks the exact topic, topic type, target/support languages, CEFR level, objectives, required structures and keywords, activity sequence, language distribution, and prohibited unrelated content.
+2. **Generate** — creates only screens allowed by that plan, using an explicit layout contract.
+3. **Validate** — checks schema safety, duration, source grounding, answer evidence, topic coverage, requested language, bilingual support, CEFR suitability, activity relevance, layout variety and preset leakage.
+4. **Repair once** — returns the validation findings to the same provider while preserving the original request. A second invalid result fails visibly; it is never replaced by generic local content.
+
+Focused grammar lessons require at least 80% topic coverage. General lessons require at least 55%. The language validator combines explicit target-language evidence, topic terms and common wrong-language markers rather than relying on a raw character ratio.
+
+The local provider supports realistic no-cost development for grammar, vocabulary, conversation, pronunciation, text comprehension and video comprehension. Common Spanish grammar topics receive specialized planning, and `ser`/`estar` receives a complete 17-screen bilingual B1 sequence with comparison, rules, examples, sorting, selection, gap fill, error correction, contextual situations, personal speaking, dialogue, recap, homework and a private answer key.
 
 ### Provider configuration
 
@@ -65,6 +80,22 @@ The local provider is an explicit development and fallback **mode**, not an auto
 The OpenAI provider uses the Responses API with strict JSON Schema output. The response then passes the independent `validateLessonDraft` runtime boundary, including request matching, duration screen limits, unique prompts, source grounding, teacher notes, and answer evidence.
 
 No paid API calls occur during tests or builds. Provider tests inject mocked fetch responses.
+
+### Transcript configuration
+
+Transcript settings are also Superclass-only and server-side:
+
+- `SUPERCLASS_TRANSCRIPT_PROVIDER` — `local`, `configured-provider`, or `none`. Development defaults to `local`; production defaults to `none`.
+- `SUPERCLASS_TRANSCRIPT_ENDPOINT` — HTTPS endpoint used by `configured-provider`.
+- `SUPERCLASS_TRANSCRIPT_API_KEY` — optional bearer credential sent only from the server to that endpoint.
+
+`configured-provider` uses one narrow contract:
+
+- Caption request: JSON `{"operation":"captions","url":"<normalized YouTube URL>"}`
+- Upload request: multipart form data with `operation=transcribe` and `file`
+- Response: JSON containing a non-empty `transcript`, with optional `platform` and `mediaId`
+
+The local provider returns clearly labeled mock captions/transcripts for development and tests. It never claims to have contacted YouTube. The configured provider may import only captions available through its supported, lawful integration; Superclass does not scrape pages or download protected video content. When captions are unavailable, the builder presents uploaded-media transcription as the primary fallback and manual transcript entry as an advanced secondary fallback.
 
 ### Diagnostics and privacy
 
@@ -89,7 +120,11 @@ Actual usage varies with source length, model behavior, regional processing, and
 
 ## Known limitations
 
-- No automatic transcript retrieval
+- Production caption import and uploaded-media transcription require a separately operated, lawful `configured-provider` endpoint; no third-party transcript service is bundled
+- The local transcript provider is intentionally mocked and is never a source of real captions
+- The generic language detector is heuristic; provider schema, topic terms and language evidence are combined to prevent obvious wrong-language output, but it is not a full linguistic classifier
+- The strongest deterministic coverage is currently Spanish grammar and Spanish/English classroom scaffolding; the AI provider remains the path for broad production-quality language/topic coverage
+- Uploaded media is limited to 100 MB at the application boundary and may be subject to stricter hosting-platform request limits
 - The in-memory cache and diagnostics history are process-local and reset between server instances
 - Cost and token figures are planning estimates rather than provider billing records
 - No accounts, teams or cloud database

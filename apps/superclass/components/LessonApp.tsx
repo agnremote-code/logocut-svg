@@ -7,6 +7,7 @@ import { MarketingSections } from "@/components/MarketingSections";
 import { PlatformCompatibility, platformDisclaimer } from "@/components/PlatformCompatibility";
 import { StudentProfiles } from "@/components/StudentProfiles";
 import { track } from "@/lib/analytics";
+import { normalizeLanguageId } from "@/lib/lesson/language";
 import { demoPresets } from "@/lib/presets";
 import { createBrowserDraftStore, LATEST_DRAFT_KEY } from "@/lib/storage/drafts";
 import { associateLessonWithProfile, createProfileStore, deleteAllLocalTeachingData } from "@/lib/storage/profiles";
@@ -93,6 +94,7 @@ export function LessonApp() {
     const preset = demoPresets.find((item) => item.id === id);
     if (!preset) return;
     setRequest(preset.request);
+    setError("");
     setAdvancedOpen(true);
     track("demo_selected", { level: preset.request.level, duration: preset.request.duration, sourceMode: preset.request.sourceMode, visualStyle: preset.request.visualStyle });
     if (createImmediately) void generate(preset.request);
@@ -127,7 +129,7 @@ export function LessonApp() {
     setRequest({
       ...request,
       profileId: profile.id,
-      language: profile.targetLanguage,
+      language: normalizeLanguageId(profile.targetLanguage) ?? "es",
       dialect: profile.dialect,
       customDialect: profile.customDialect,
       level: profile.level,
@@ -176,25 +178,20 @@ export function LessonApp() {
 
       <section className="hero" id="top">
         <div className="hero-copy">
-          <span className="hero-kicker">INTERACTIVE LESSON SOFTWARE FOR ONLINE LANGUAGE TEACHERS</span>
-          <h1>Build Better Online Classes in Minutes</h1>
-          <p>Turn any idea, article, transcript or video into interactive lesson software, a student workbook and a complete teacher pack.</p>
+          <span className="hero-kicker">DESIGNED LESSON SOFTWARE FOR LANGUAGE TEACHERS</span>
+          <h1>Create Classes Students Remember</h1>
+          <p>Turn any topic, text or video into a designed interactive lesson, student workbook and teacher pack.</p>
           <div className="hero-actions">
             <button className="primary-button" type="button" onClick={scrollToBuilder}>Create My Next Class</button>
-            <button className="text-button" type="button" onClick={() => selectPreset("b1-abroad", true)}>Open an Interactive Demo <span>→</span></button>
+            <button className="text-button" type="button" onClick={() => selectPreset("b1-abroad", true)}>Open a Demo <span>→</span></button>
           </div>
-          <p className="platform-line">For independent tutors and teachers working through Preply, italki and other online teaching platforms.</p>
-          <div className="trust-grid">
-            {["A0 to C2", "Ready to present", "Teacher notes included", "Homework and answer key", "Individual or group classes", "No design work required"].map((item) => (
-              <span key={item}>✓ {item}</span>
-            ))}
-          </div>
+          <p className="platform-line">For independent tutors and online language teachers.</p>
         </div>
         <div className="hero-visual" aria-label="Example lesson flow">
           <div className="visual-window">
             <div className="visual-top"><span>LESSON 04</span><b>B1 · 60 MIN</b></div>
-            <div className="visual-card card-one"><small>WARM-UP</small><h3>When did a new place start to feel like home?</h3></div>
-            <div className="visual-card card-two"><small>LANGUAGE TOOLKIT</small><div><b>fit in</b><b>culture shock</b><b>common ground</b></div></div>
+            <div className="visual-card card-one"><small>VISUAL GRAMMAR</small><h3>SER vs ESTAR</h3></div>
+            <div className="visual-card card-two"><small>MEANING MAP</small><div><b>identity</b><b>location</b><b>state</b></div></div>
             <div className="visual-strip"><span className="active">01</span><span>02</span><span>03</span><span>04</span><span>18</span></div>
           </div>
           <div className="floating-note"><b>Teacher note</b><span>Give 20 seconds to plan. Save correction until the end.</span></div>
@@ -214,7 +211,7 @@ export function LessonApp() {
 
       <LessonBuilder
         request={request}
-        setRequest={(next) => { setRequest(next); track("lesson_form_started", { level: next.level, duration: next.duration, sourceMode: next.sourceMode }); }}
+        setRequest={(next) => { setRequest(next); setError(""); track("lesson_form_started", { level: next.level, duration: next.duration, sourceMode: next.sourceMode }); }}
         loading={loading}
         error={error}
         advancedOpen={advancedOpen}

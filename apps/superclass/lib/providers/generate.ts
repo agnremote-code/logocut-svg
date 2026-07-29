@@ -13,6 +13,7 @@ import {
 import { ProviderError, type LessonProvider } from "@/lib/providers/types";
 import { validateLessonDraft } from "@/lib/validation/lesson";
 import type { LessonDraft, LessonRequest } from "@/types/lesson";
+import { languageLabel } from "@/lib/lesson/language";
 
 type GenerationOptions = {
   config?: ProviderConfig;
@@ -33,6 +34,7 @@ async function withTimeout(
   request: LessonRequest,
   context: { requestId: string; contentHash: string },
   timeoutMs: number,
+  repairErrors?: string[],
 ) {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -43,7 +45,7 @@ async function withTimeout(
         reject(new ProviderError("Lesson generation timed out. Try again.", "timeout", true));
       }, timeoutMs);
     });
-    return await Promise.race([provider.generate(request, { ...context, signal: controller.signal }), timeout]);
+    return await Promise.race([provider.generate(request, { ...context, signal: controller.signal, repairErrors }), timeout]);
   } catch (error) {
     if (controller.signal.aborted) throw new ProviderError("Lesson generation timed out. Try again.", "timeout", true);
     throw error;
@@ -59,7 +61,7 @@ function normalizeLesson(input: LessonDraft, request: LessonRequest, requestId: 
     id: input.id || `lesson-${contentHash}`,
     requestId,
     contentHash,
-    language: request.language,
+    language: languageLabel(request.language, request.customLanguage),
     dialect: request.dialect === "custom" ? request.customDialect : request.dialect,
     level: request.level,
     duration: request.duration,
@@ -121,22 +123,25 @@ export async function generateLesson(
   }
 
   let attempts = 0;
+  let repairErrors: string[] | undefined;
   let validation: GenerationDiagnostic["validation"] = "not-run";
   try {
     while (attempts < 2) {
       attempts += 1;
       try {
-        const output = await withTimeout(provider, request, { requestId, contentHash }, config.timeoutMs);
+        const output = await withTimeout(provider, request, { requestId, contentHash }, config.timeoutMs, repairErrors);
         const structural = validateLessonDraft(output);
         validation = structural.ok ? "valid" : "invalid";
         if (!structural.ok) {
-          throw new ProviderError(`Generated lesson failed validation: ${structural.errors.join(" ")}`, "invalid-response");
+          repairErrors = structural.errors;
+          throw new ProviderError(`Generated lesson failed validation: ${structural.errors.join(" ")}`, "invalid-response", attempts < 2);
         }
         const lesson = normalizeLesson(structural.value, request, requestId, contentHash);
         const validated = validateLessonDraft(lesson, request);
         validation = validated.ok ? "valid" : "invalid";
         if (!validated.ok) {
-          throw new ProviderError(`Generated lesson failed validation: ${validated.errors.join(" ")}`, "invalid-response");
+          repairErrors = validated.errors;
+          throw new ProviderError(`Generated lesson failed validation: ${validated.errors.join(" ")}`, "invalid-response", attempts < 2);
         }
         await cache.set(contentHash, validated.value);
         const diagnostic: GenerationDiagnostic = {

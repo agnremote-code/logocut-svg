@@ -7,6 +7,34 @@ import type { LessonDraft, LessonScreen } from "@/types/lesson";
 type Props = { lesson: LessonDraft; initialIndex: number; onExit: () => void };
 
 function Activity({ screen, state, setState }: { screen: LessonScreen; state: ActivityState; setState: (state: ActivityState) => void }) {
+  if (screen.layout === "cover") {
+    return <div className="cover-composition" aria-hidden="true"><i /><i /><i /><span>01</span><b>READY TO TEACH</b></div>;
+  }
+  if (screen.layout === "comparison") {
+    const [ser = "", estar = ""] = (screen.body ?? "").split(/ESTAR\s*→/i);
+    return <div className="grammar-comparison">
+      <article className="ser-column"><small>IDENTITY · ORIGIN · PROFESSION</small><strong>SER</strong><p>{ser.replace(/SER\s*→/i, "").trim()}</p></article>
+      <div className="comparison-vs">VS</div>
+      <article className="estar-column"><small>LOCATION · STATE · EMOTION</small><strong>ESTAR</strong><p>{estar.trim()}</p></article>
+    </div>;
+  }
+  if (screen.layout === "rule-cards" || screen.layout === "example-gallery") {
+    return <div className="rule-gallery">{screen.prompts.map((prompt, index) => <article key={prompt} className={index % 2 ? "estar-rule" : "ser-rule"}><span>{String(index + 1).padStart(2, "0")}</span><p>{prompt}</p></article>)}</div>;
+  }
+  if (screen.layout === "sorting") {
+    return <div className="sorting-board">
+      <div className="sort-zone ser-zone"><small>DROP / CHOOSE</small><strong>SER</strong></div>
+      <div className="sort-cards">{screen.prompts.map((prompt, index) => <button type="button" aria-pressed={state.selected.includes(index)} key={prompt} onClick={() => setState(toggleActivityChoice(state, index))}>{state.selected.includes(index) ? "✓ " : ""}{prompt}</button>)}</div>
+      <div className="sort-zone estar-zone"><small>DROP / CHOOSE</small><strong>ESTAR</strong></div>
+    </div>;
+  }
+  if (screen.layout === "dialogue") {
+    const turns = (screen.body ?? "").split(/(?=[AB]:)/).filter(Boolean);
+    return <div className="dialogue-stage">{turns.map((turn, index) => <div key={`${turn}-${index}`} className={index % 2 ? "bubble right" : "bubble left"}><span>{index % 2 ? "B" : "A"}</span><p>{turn.replace(/^[AB]:\s*/, "")}</p></div>)}</div>;
+  }
+  if (screen.layout === "fill-gap" || screen.layout === "sentence-builder") {
+    return <div className="sentence-workbench">{screen.prompts.map((prompt, index) => <button type="button" className={state.selected.includes(index) ? "sentence-tile selected" : "sentence-tile"} key={prompt} onClick={() => setState(toggleActivityChoice(state, index))}><span>{index + 1}</span><p>{prompt}</p><i>___</i></button>)}</div>;
+  }
   if (screen.type === "vocabulary") {
     return <div className="activity-flashcards">{screen.vocabulary.map((item, index) => {
       const flipped = state.flipped.includes(index);
@@ -91,6 +119,8 @@ export function ClassroomMode({ lesson, initialIndex, onExit }: Props) {
       {!sidebarOpen && <button className="sidebar-reopen" type="button" onClick={() => setSidebarOpen(true)}>Modules →</button>}
 
       <main className="teaching-stage">
+        <section className={`classroom-canvas layout-${screen.layout}`}>
+        <div className="canvas-motif" aria-hidden="true"><i /><i /><i /></div>
         <div className="stage-label"><span>{moduleForScreen(screen)}</span><b>Activity {index + 1} of {lesson.screens.length}</b></div>
         <h1>{screen.title}</h1>
         <p className="stage-instruction">{screen.instruction}</p>
@@ -102,6 +132,7 @@ export function ClassroomMode({ lesson, initialIndex, onExit }: Props) {
           {teacherMode && screen.answers.length > 0 && <button type="button" aria-expanded={state.revealed} onClick={() => updateState({ ...state, revealed: !state.revealed })}>{state.revealed ? "Hide answer" : "Reveal answer"}</button>}
         </div>
         {teacherMode && state.revealed && <div className="model-answer"><small>TEACHER ANSWER / MODEL</small>{screen.answers.map((answer) => <p key={answer}>{answer}</p>)}</div>}
+        </section>
       </main>
 
       {teacherMode && panelOpen && <aside className="private-teacher-panel">

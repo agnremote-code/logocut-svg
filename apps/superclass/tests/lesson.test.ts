@@ -67,7 +67,7 @@ test("roleplay is disabled by default and only appears when deliberately enabled
   const without = await deterministicProvider.generate(defaultLessonRequest, context);
   const withRoleplay = await deterministicProvider.generate({ ...defaultLessonRequest, includeRoleplay: true }, context);
   assert.equal(without.screens.some((screen) => screen.title === "Optional roleplay"), false);
-  assert.equal(withRoleplay.screens.some((screen) => screen.title === "Optional roleplay"), true);
+  assert.equal(withRoleplay.screens.some((screen) => screen.title === "Roleplay específico"), true);
 });
 
 test("A0 and C1 output differ pedagogically", async () => {
@@ -161,5 +161,5 @@ test("video URL validation accepts safe URLs and extracts YouTube IDs", () => {
 test("video requests require teacher-supplied transcript or notes", () => {
   const result = validateLessonRequest({ ...defaultLessonRequest, sourceMode: "video", videoUrl: "https://youtu.be/dQw4w9WgXcQ", transcript: "" });
   assert.equal(result.ok, false);
-  if (!result.ok) assert.match(result.errors.join(" "), /transcript or notes/);
+  if (!result.ok) assert.match(result.errors.join(" "), /Import captions or upload/);
 });

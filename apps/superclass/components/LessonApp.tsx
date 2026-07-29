@@ -6,7 +6,7 @@ import { LessonWorkspace } from "@/components/LessonWorkspace";
 import { MarketingSections } from "@/components/MarketingSections";
 import { track } from "@/lib/analytics";
 import { demoPresets } from "@/lib/presets";
-import { createBrowserDraftStore } from "@/lib/storage/drafts";
+import { createBrowserDraftStore, LATEST_DRAFT_KEY } from "@/lib/storage/drafts";
 import { defaultLessonRequest, type LessonDraft, type LessonRequest } from "@/types/lesson";
 
 export function LessonApp() {
@@ -20,8 +20,10 @@ export function LessonApp() {
 
   useEffect(() => {
     const store = createBrowserDraftStore(window.localStorage);
+    const storedValue = window.localStorage.getItem(LATEST_DRAFT_KEY);
     const latest = store.loadLatest();
     if (latest) setLesson(latest);
+    else if (storedValue) setError("A saved draft uses an older format and could not be restored. Start a new lesson to replace it.");
     setRecent(store.list());
     track("homepage_view");
   }, []);

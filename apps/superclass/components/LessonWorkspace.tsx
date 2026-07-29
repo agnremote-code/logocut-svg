@@ -24,6 +24,7 @@ export function LessonWorkspace({ lesson, onChange, onNew }: Props) {
   const [printMode, setPrintMode] = useState<"teacher" | "student">("teacher");
   const [regenerating, setRegenerating] = useState(false);
   const [regenerationError, setRegenerationError] = useState("");
+  const [printError, setPrintError] = useState("");
   const screen = lesson.screens[Math.min(selected, lesson.screens.length - 1)];
   const previewLimit = productConfig.lockMarketingPreview ? 3 : lesson.screens.length;
   const lockedCount = Math.max(lesson.screens.length - previewLimit, 0);
@@ -89,8 +90,19 @@ export function LessonWorkspace({ lesson, onChange, onNew }: Props) {
   };
   const print = () => {
     setPrintMode(printMode);
+    setPrintError("");
     track("print_started", { level: lesson.level, duration: lesson.duration });
-    window.requestAnimationFrame(() => window.print());
+    if (typeof window.print !== "function") {
+      setPrintError("Printing is not supported in this browser. Try a desktop browser with Print / Save as PDF.");
+      return;
+    }
+    window.requestAnimationFrame(() => {
+      try {
+        window.print();
+      } catch {
+        setPrintError("The print dialog could not open. Check browser permissions and try again.");
+      }
+    });
   };
 
   return (
@@ -131,6 +143,7 @@ export function LessonWorkspace({ lesson, onChange, onNew }: Props) {
           <button type="button" className="secondary-button" onClick={print}>Print / Save PDF</button>
         </div>
       </div>
+      {printError && <p className="workspace-error" role="alert">{printError}</p>}
 
       <div className="workspace-body">
         <aside className="slide-strip" aria-label="Lesson screens">

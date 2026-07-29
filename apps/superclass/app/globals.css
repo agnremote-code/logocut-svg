@@ -192,6 +192,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .screen-count span { margin: 5px 0 14px; font-weight: 800; }
 .screen-count small { line-height: 1.5; text-transform: none; letter-spacing: 0; }
 .workspace-toolbar { display: flex; justify-content: space-between; gap: 20px; align-items: end; padding: 18px 0 14px; }
+.workspace-error { margin: 0 0 14px; border-left: 4px solid #ff8b8b; padding: 10px 12px; background: #3a2026; color: #ffd9d9; font-weight: 750; }
 .mode-switch { display: flex; padding: 4px; border-radius: 12px; background: #2b2934; }
 .mode-switch button { border: 0; border-radius: 9px; padding: 9px 14px; background: transparent; color: #c9c6d0; font-weight: 850; }
 .mode-switch button[aria-pressed="true"] { background: white; color: var(--ink); }

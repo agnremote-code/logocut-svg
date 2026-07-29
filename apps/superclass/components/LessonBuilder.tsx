@@ -48,7 +48,7 @@ export function LessonBuilder({
           <span className="section-kicker">BUILD YOUR FIRST CLASS</span>
           <h2 id="builder-title">What should your student be able to do?</h2>
         </div>
-        <span className="local-badge">Local demo · no AI cost</span>
+        <span className="local-badge">Schema-validated generation</span>
       </div>
 
       <div className="preset-row" aria-label="Anonymized lesson presets">

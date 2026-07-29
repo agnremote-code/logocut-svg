@@ -46,11 +46,49 @@ npm run build
 - `components/` — focused builder, workspace, classroom, and marketing UI
 - `app/api/lessons` — validated server route and request ID boundary
 
-The deterministic provider is intentionally server-only and incurs no external cost. A future AI provider must implement `LessonProvider`; provider failures are surfaced and are never replaced by a fake successful response.
+### Provider configuration
+
+Copy `.env.local.example` to `.env.local` inside this directory. All provider settings are Superclass-specific and server-only:
+
+- `SUPERCLASS_LESSON_PROVIDER` — `local` (default) or `openai`
+- `SUPERCLASS_OPENAI_API_KEY` — required only when `openai` is selected
+- `SUPERCLASS_OPENAI_MODEL` — defaults to the cost-conscious `gpt-5.4-mini`
+- `SUPERCLASS_PROVIDER_TIMEOUT_MS` — 1,000–120,000 ms; defaults to 45,000
+- `SUPERCLASS_MAX_SOURCE_CHARS` — 500–12,000; defaults to 12,000
+- `SUPERCLASS_GENERATION_CACHE` — `memory` (default) or `none`
+
+The local provider is an explicit development and fallback **mode**, not an automatic fallback after an AI error. If OpenAI fails, times out, refuses, returns malformed JSON, or returns a schema-invalid lesson, the request fails visibly. At most one retry is attempted, and only for safe transient failures such as a timeout, rate limit, or server error.
+
+The OpenAI provider uses the Responses API with strict JSON Schema output. The response then passes the independent `validateLessonDraft` runtime boundary, including request matching, duration screen limits, unique prompts, source grounding, teacher notes, and answer evidence.
+
+No paid API calls occur during tests or builds. Provider tests inject mocked fetch responses.
+
+### Diagnostics and privacy
+
+In development, `/diagnostics` shows the selected provider, model, request duration, estimated tokens and cost, validation result, attempt count, outcome, content hash, and request ID. The route returns 404 in production.
+
+Generation logs contain only operational and categorical metadata: request ID, content hash, provider/model, timings, token/cost estimates, CEFR level, duration, source mode, source character count, screen count, validation result, attempt count, outcome, and error code. They never include source or transcript text, interests, goals, difficulties, strengths, student details, API keys, or provider response bodies.
+
+The cache is represented by `GenerationCache`; the included in-memory implementation is process-local and keyed by a provider/model-aware content hash. A durable encrypted cache can replace it without changing generation orchestration.
+
+### Cost planning
+
+The default `gpt-5.4-mini` estimator uses current standard pricing of $0.75 per million input tokens and $4.50 per million output tokens. With a short source and the app’s duration-specific output budgets, estimated generation costs are approximately:
+
+| Duration | Estimated tokens (input + output) | Estimated cost |
+| --- | ---: | ---: |
+| 30 min | 1,820 + 4,500 | $0.0216 |
+| 45 min | 1,820 + 6,500 | $0.0306 |
+| 60 min | 1,820 + 9,000 | $0.0419 |
+| 90 min | 1,820 + 13,000 | $0.0599 |
+
+Actual usage varies with source length, model behavior, regional processing, and future pricing. Unknown custom models display token estimates without inventing a cost.
 
 ## Known limitations
 
-- No real AI provider or automatic transcript retrieval
+- No automatic transcript retrieval
+- The in-memory cache and diagnostics history are process-local and reset between server instances
+- Cost and token figures are planning estimates rather than provider billing records
 - No accounts, teams, cloud database, or reusable named student profiles
 - Local drafts are device/browser-specific
 - No payment or unlock implementation

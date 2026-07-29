@@ -14,6 +14,7 @@ export type ValidationResult<T> = { ok: true; value: T } | { ok: false; errors: 
 const isString = (value: unknown): value is string => typeof value === "string";
 const isBoolean = (value: unknown): value is boolean => typeof value === "boolean";
 const includes = <T extends readonly unknown[]>(items: T, value: unknown): value is T[number] => items.includes(value);
+const isStringArray = (value: unknown): value is string[] => Array.isArray(value) && value.every(isString);
 
 export function extractYouTubeId(value: string): string | null {
   try {
@@ -108,25 +109,88 @@ const limits: Record<string, { title: number; body: number; questions: number }>
   default: { title: 68, body: 360, questions: 4 },
 };
 
-export function validateLessonDraft(lesson: LessonDraft): ValidationResult<LessonDraft> {
+export function validateLessonDraft(input: unknown, request?: LessonRequest): ValidationResult<LessonDraft> {
+  if (!input || typeof input !== "object") return { ok: false, errors: ["Generated lesson is not an object."] };
+  const lesson = input as Record<string, unknown>;
   const errors: string[] = [];
   const ids = new Set<string>();
   const questions = new Set<string>();
-  const screenRange = lesson.duration === 30 ? [8, 12] : lesson.duration === 45 ? [12, 17] : lesson.duration === 60 ? [16, 24] : [24, 36];
-  if (lesson.screens.length < screenRange[0] || lesson.screens.length > screenRange[1]) errors.push("Screen count does not match lesson duration.");
-  for (const screen of lesson.screens) {
+  if (lesson.schemaVersion !== 1) errors.push("Unsupported lesson schema version.");
+  if (!isString(lesson.id) || !lesson.id.trim()) errors.push("Lesson ID is missing.");
+  if (!isString(lesson.requestId) || !lesson.requestId.trim()) errors.push("Request ID is missing.");
+  if (!isString(lesson.contentHash) || !lesson.contentHash.trim()) errors.push("Content hash is missing.");
+  if (!isString(lesson.title) || !lesson.title.trim()) errors.push("Lesson title is missing.");
+  if (!isString(lesson.language) || !lesson.language.trim()) errors.push("Lesson language is missing.");
+  if (!isString(lesson.dialect)) errors.push("Lesson dialect is invalid.");
+  if (!includes(lessonLevels, lesson.level)) errors.push("Lesson level is invalid.");
+  if (!includes(lessonDurations, lesson.duration)) errors.push("Lesson duration is invalid.");
+  if (!includes(visualStyles, lesson.visualStyle)) errors.push("Lesson visual style is invalid.");
+  if (!isString(lesson.studentProfile)) errors.push("Student profile is invalid.");
+  if (!isStringArray(lesson.objectives) || lesson.objectives.length === 0) errors.push("Lesson objectives are missing.");
+  if (!includes(sourceModes, lesson.sourceMode)) errors.push("Lesson source mode is invalid.");
+  if (!isString(lesson.createdAt) || Number.isNaN(Date.parse(lesson.createdAt))) errors.push("Lesson creation date is invalid.");
+  if (!isString(lesson.suggestedNextLesson)) errors.push("Suggested next lesson is invalid.");
+  if (!isStringArray(lesson.levelSignals) || lesson.levelSignals.length === 0) errors.push("Lesson has no level-specific validation signals.");
+  if (!Array.isArray(lesson.screens)) errors.push("Lesson screens are missing.");
+
+  if (errors.length) return { ok: false, errors };
+
+  const typed = lesson as unknown as LessonDraft;
+  const screenRange = typed.duration === 30 ? [8, 12] : typed.duration === 45 ? [12, 17] : typed.duration === 60 ? [16, 24] : [24, 36];
+  if (typed.screens.length < screenRange[0] || typed.screens.length > screenRange[1]) errors.push("Screen count does not match lesson duration.");
+  for (const [index, rawScreen] of typed.screens.entries()) {
+    if (!rawScreen || typeof rawScreen !== "object") {
+      errors.push(`Screen ${index + 1} is invalid.`);
+      continue;
+    }
+    const screen = rawScreen as LessonDraft["screens"][number];
+    if (!isString(screen.id) || !screen.id.trim()) {
+      errors.push(`Screen ${index + 1} has no ID.`);
+      continue;
+    }
     const rule = limits[screen.type] ?? limits.default;
-    if (!screen.title.trim() || screen.title.length > rule.title) errors.push(`Invalid title on ${screen.id}.`);
+    if (!isString(screen.title) || !screen.title.trim() || screen.title.length > rule.title) errors.push(`Invalid title on ${screen.id}.`);
+    if (!isString(screen.instruction) || !screen.instruction.trim()) errors.push(`Instruction is missing on ${screen.id}.`);
+    if (screen.body !== undefined && !isString(screen.body)) errors.push(`Body is invalid on ${screen.id}.`);
     if ((screen.body?.length ?? 0) > rule.body) errors.push(`Body is too long on ${screen.id}.`);
-    if (screen.prompts.length > rule.questions) errors.push(`Too many prompts on ${screen.id}.`);
+    if (!isStringArray(screen.prompts)) errors.push(`Prompts are invalid on ${screen.id}.`);
+    if (!Array.isArray(screen.vocabulary) || screen.vocabulary.some((item) => !item || !isString(item.term) || !isString(item.meaning) || !isString(item.example))) {
+      errors.push(`Vocabulary is invalid on ${screen.id}.`);
+    }
+    if (!isStringArray(screen.answers)) errors.push(`Answers are invalid on ${screen.id}.`);
+    if (!isStringArray(screen.teacherNotes)) errors.push(`Teacher notes are invalid on ${screen.id}.`);
+    if (!Number.isInteger(screen.timing) || screen.timing < 0) errors.push(`Timing is invalid on ${screen.id}.`);
+    if (screen.sourceExcerpt !== undefined && !isString(screen.sourceExcerpt)) errors.push(`Source excerpt is invalid on ${screen.id}.`);
+    if (screen.videoId !== undefined && !isString(screen.videoId)) errors.push(`Video ID is invalid on ${screen.id}.`);
+    if (Array.isArray(screen.prompts) && screen.prompts.length > rule.questions) errors.push(`Too many prompts on ${screen.id}.`);
     if (ids.has(screen.id)) errors.push(`Duplicate screen ${screen.id}.`);
     ids.add(screen.id);
-    for (const prompt of screen.prompts) {
+    for (const prompt of Array.isArray(screen.prompts) ? screen.prompts : []) {
+      if (!isString(prompt)) continue;
       const normalized = prompt.toLowerCase().replace(/\W/g, "");
       if (questions.has(normalized)) errors.push(`Duplicate question on ${screen.id}.`);
       questions.add(normalized);
     }
   }
-  if (!lesson.levelSignals.length) errors.push("Lesson has no level-specific validation signals.");
-  return errors.length ? { ok: false, errors } : { ok: true, value: lesson };
+
+  if (request) {
+    if (typed.level !== request.level || typed.duration !== request.duration || typed.sourceMode !== request.sourceMode) {
+      errors.push("Generated lesson does not match the requested level, duration, or source mode.");
+    }
+    if (request.sourceMode !== "idea") {
+      const source = request.sourceMode === "video" ? request.transcript : request.source;
+      const normalize = (value: string) => value.toLocaleLowerCase().replace(/\s+/g, " ").trim();
+      const normalizedSource = normalize(source);
+      const groundedScreens = typed.screens.filter((screen) => {
+        const excerpt = screen.sourceExcerpt?.trim();
+        return excerpt && excerpt.length >= 8 && normalizedSource.includes(normalize(excerpt));
+      });
+      if (groundedScreens.length === 0) errors.push("Source-based lesson has no exact supporting excerpt.");
+      const comprehension = typed.screens.filter((screen) => screen.type === "comprehension");
+      if (!comprehension.length || comprehension.some((screen) => screen.answers.length === 0)) {
+        errors.push("Source comprehension screens require answer evidence.");
+      }
+    }
+  }
+  return errors.length ? { ok: false, errors } : { ok: true, value: typed };
 }

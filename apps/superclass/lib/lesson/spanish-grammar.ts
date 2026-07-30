@@ -153,7 +153,7 @@ export function buildSpanishGrammarScreens(request: LessonRequest, plan: LessonP
   add("exit-task", "recap", "Mapa final", support("Resume la regla y demuestra que puedes usarla.", "Summarize and demonstrate."), { prompts: [`Uso ${content.title.toLocaleLowerCase()} para…`, "Un contraste importante es…", "Mi ejemplo personal es…"], answers: content.contrast, teacherNotes: ["Compare with the opening objective."], timing: 3 });
   if (request.includeHomework) add("homework", "homework", `Tarea: ${content.title}`, support("Escribe ocho frases y revisa cada elección.", "Write eight sentences and check every choice."), { prompts: ["4 ejemplos de la primera función", "4 ejemplos de la segunda función", "Subraya la forma meta", "Corrige una frase después de revisarla"], answers: ["Check form, meaning, agreement and topic relevance."], teacherNotes: ["Keep homework independent of paid tools."], timing: 2 });
 
-  const targetBeforeKey = targetScreenCount(request.duration) - 1;
+  const targetBeforeKey = targetScreenCount(request.duration, request.level) - 1;
   let round = 1;
   while (screens.length < targetBeforeKey) {
     add("controlled-practice", round % 2 ? "sentence-builder" : "multiple-choice", `Práctica enfocada ${round}`, `Usa ${content.title.toLocaleLowerCase()} en una situación nueva.`, { prompts: [content.personal[(round - 1) % content.personal.length], content.gaps[(round - 1) % content.gaps.length]], answers: [content.gapAnswers[(round - 1) % content.gapAnswers.length]], teacherNotes: ["Keep the added round on the exact grammar target."], timing: 4 });

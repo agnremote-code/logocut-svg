@@ -11,6 +11,9 @@ import {
   type LessonRequest,
 } from "@/types/lesson";
 import { isValidLessonDuration, lessonScreenRange } from "@/lib/lesson/duration";
+import { hasRepeatedLayoutRun } from "@/lib/lesson/creative-brief";
+import { interpretLessonRequest } from "@/lib/lesson/intent";
+import { createLessonPlan } from "@/lib/lesson/planning";
 import { normalizeLanguageId } from "@/lib/lesson/language";
 import { validateTopicAndLanguage } from "@/lib/lesson/quality";
 
@@ -160,7 +163,7 @@ export function validateLessonDraft(input: unknown, request?: LessonRequest): Va
   if (errors.length) return { ok: false, errors };
 
   const typed = lesson as unknown as LessonDraft;
-  const screenRange = lessonScreenRange(typed.duration);
+  const screenRange = lessonScreenRange(typed.duration, typed.level);
   if (typed.screens.length < screenRange[0] || typed.screens.length > screenRange[1]) errors.push("Screen count does not match lesson duration.");
   for (const [index, rawScreen] of typed.screens.entries()) {
     if (!rawScreen || typeof rawScreen !== "object") {
@@ -201,11 +204,22 @@ export function validateLessonDraft(input: unknown, request?: LessonRequest): Va
     }
   }
 
+  if (hasRepeatedLayoutRun(typed.screens.map((screen) => screen.layout))) {
+    errors.push("A layout is repeated more than twice consecutively.");
+  }
+  const purposes = typed.screens
+    .filter((screen) => screen.type !== "answer-key")
+    .map((screen) => `${screen.type}:${screen.title.toLocaleLowerCase().replace(/\W/g, "")}`);
+  if (new Set(purposes).size !== purposes.length) errors.push("Every student screen needs a unique pedagogical purpose.");
+
   if (request) {
     if (typed.level !== request.level || typed.duration !== request.duration || typed.sourceMode !== request.sourceMode) {
       errors.push("Generated lesson does not match the requested level, duration, or source mode.");
     }
-    if (request.sourceMode !== "idea") {
+    const intent = interpretLessonRequest(request);
+    const plan = createLessonPlan(request, intent);
+    const sourceGrounded = intent.sourceKind === "video" || intent.sourceKind === "source-material";
+    if (sourceGrounded) {
       const source = request.sourceMode === "video" ? request.transcript : request.source;
       const normalize = (value: string) => value.toLocaleLowerCase().replace(/\s+/g, " ").trim();
       const normalizedSource = normalize(source);
@@ -217,6 +231,16 @@ export function validateLessonDraft(input: unknown, request?: LessonRequest): Va
       const comprehension = typed.screens.filter((screen) => screen.type === "comprehension");
       if (!comprehension.length || comprehension.some((screen) => screen.answers.length === 0)) {
         errors.push("Source comprehension screens require answer evidence.");
+      }
+    }
+    const rawCommand = request.source.trim().replace(/\s+/g, " ").toLocaleLowerCase();
+    if (rawCommand && typed.title.trim().toLocaleLowerCase() === rawCommand) errors.push("Raw user command cannot be used as the lesson title.");
+    if (plan.specializedTemplate === "ser-estar" && request.level === "A1") {
+      const studentScreens = typed.screens.filter((screen) => screen.type !== "answer-key");
+      if (studentScreens.length < 10 || studentScreens.length > 13) errors.push("A1 ser/estar requires 10–13 student screens.");
+      const opening = studentScreens[0];
+      if (opening?.layout === "topic-menu" || /palabras.*verbos.*frases.*preguntas/i.test([opening?.title, opening?.body, ...(opening?.prompts ?? [])].filter(Boolean).join(" "))) {
+        errors.push("A1 ser/estar cannot open with a generic module menu.");
       }
     }
     const quality = validateTopicAndLanguage(typed, request);

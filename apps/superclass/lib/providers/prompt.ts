@@ -1,11 +1,18 @@
 import { lessonScreenRange } from "@/lib/lesson/duration";
+import { createCreativeLessonBrief, type CreativeLessonBrief } from "@/lib/lesson/creative-brief";
+import { interpretLessonRequest, type InterpretedLessonIntent } from "@/lib/lesson/intent";
 import { createLessonPlan } from "@/lib/lesson/planning";
 import type { LessonRequest } from "@/types/lesson";
 
-export function buildLessonPrompt(request: LessonRequest, repairErrors: string[] = []) {
+export function buildLessonPrompt(
+  request: LessonRequest,
+  repairErrors: string[] = [],
+  intent: InterpretedLessonIntent = interpretLessonRequest(request),
+  creativeBrief: CreativeLessonBrief = createCreativeLessonBrief(request, intent),
+) {
   const activeSource = request.sourceMode === "video" ? request.transcript : request.source;
-  const [minimumScreens, maximumScreens] = lessonScreenRange(request.duration);
-  const plan = createLessonPlan(request);
+  const [minimumScreens, maximumScreens] = lessonScreenRange(request.duration, request.level);
+  const plan = createLessonPlan(request, intent, creativeBrief);
   return [
     "Create a complete, classroom-ready language lesson as JSON matching the supplied schema.",
     "Hard requirements:",
@@ -14,11 +21,13 @@ export function buildLessonPrompt(request: LessonRequest, repairErrors: string[]
     "- Keep instructions concise, usable on a projected slide, and appropriate for the learner level.",
     "- Include private teacher notes and answer evidence wherever a question has a supported answer.",
     "- Never invent facts, quotations, transcript content, or claims about a real student.",
-    "- For text or video mode, comprehension questions and answers must use only the supplied source.",
+    "- For source material or video, comprehension questions and answers must use only the supplied source.",
     "- Copy short supporting excerpts exactly from the supplied source into sourceExcerpt.",
     "- Keep every title under 68 characters (cover under 90), body under 360 characters, and at most four prompts per screen.",
     "- Use unique screen IDs and avoid duplicate questions.",
     "- Return JSON only through the structured response schema.",
+    `- Follow this interpreted intent exactly: ${JSON.stringify(intent)}.`,
+    `- Follow this internal creative lesson brief exactly: ${JSON.stringify(creativeBrief)}.`,
     `- Follow this validated pedagogical plan exactly: ${JSON.stringify(plan)}.`,
     `- Keep student-facing content primarily in ${plan.language.targetLabel}; ${plan.language.supportLabel} is support only under ${plan.language.mode} mode.`,
     `- Target approximately ${Math.round(plan.language.targetRatio * 100)}% target-language instructional exposure.`,
@@ -29,6 +38,8 @@ export function buildLessonPrompt(request: LessonRequest, repairErrors: string[]
     "Lesson settings:",
     JSON.stringify({
       sourceMode: request.sourceMode,
+      interpretedSourceKind: intent.sourceKind,
+      interpretedTitle: intent.title,
       source: activeSource,
       videoUrl: request.videoUrl,
       targetLanguage: plan.language.targetLabel,

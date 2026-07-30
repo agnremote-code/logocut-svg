@@ -42,14 +42,19 @@ test("every duration stays inside its required screen range", async () => {
   }
 });
 
-test("idea, text and video source modes stay differentiated and grounded", async () => {
+test("idea material and video source modes stay differentiated and grounded", async () => {
   const idea = await deterministicProvider.generate(defaultLessonRequest, context);
-  const textRequest: LessonRequest = {
+  const materialRequest: LessonRequest = {
     ...defaultLessonRequest,
-    sourceMode: "text",
-    source: "City parks reduce heat and give neighbors a place to meet. Local funding remains uneven.",
+    sourceMode: "idea",
+    source: [
+      "City parks reduce heat and give neighbors a place to meet.",
+      "Local funding remains uneven.",
+      "Residents say shaded public areas make summer afternoons safer.",
+      "The article compares two neighborhood projects and their results.",
+    ].join("\n"),
   };
-  const text = await deterministicProvider.generate(textRequest, context);
+  const material = await deterministicProvider.generate(materialRequest, context);
   const videoRequest: LessonRequest = {
     ...defaultLessonRequest,
     sourceMode: "video",
@@ -58,7 +63,7 @@ test("idea, text and video source modes stay differentiated and grounded", async
   };
   const video = await deterministicProvider.generate(videoRequest, context);
   assert.equal(idea.screens.some((screen) => screen.type === "source"), false);
-  assert.equal(text.screens.some((screen) => screen.sourceExcerpt?.includes("City parks")), true);
+  assert.equal(material.screens.some((screen) => screen.sourceExcerpt?.includes("City parks")), true);
   assert.equal(video.screens.some((screen) => screen.videoId === "dQw4w9WgXcQ"), true);
 });
 

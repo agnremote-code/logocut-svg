@@ -1,8 +1,8 @@
 import type { LanguageId, LanguageMode, LessonLevel, LessonRequest } from "@/types/lesson";
 
 export const languageOptions: ReadonlyArray<{ id: LanguageId; label: string }> = [
-  { id: "en", label: "English" },
   { id: "es", label: "Spanish" },
+  { id: "en", label: "English" },
   { id: "fr", label: "French" },
   { id: "pt", label: "Portuguese" },
   { id: "de", label: "German" },

@@ -32,11 +32,12 @@ test("Teacher tools are closed by default and no permanent teacher panel remains
   assert.match(classroom, /useState\(false\)[\s\S]*teacherToolsOpen|teacherToolsOpen[\s\S]*useState\(false\)/);
   assert.doesNotMatch(classroom, /private-teacher-panel|PRIVATE TEACHER PANEL|panelOpen/);
   assert.match(classroom, /Teacher tools/);
-  assert.match(classroom, /teacherMode && teacherToolsOpen/);
+  assert.match(classroom, /teacherToolsOpen && <aside/);
 });
 
-test("student mode hides teacher tools and answers", () => {
-  assert.match(classroom, /teacherMode && <button[^>]+[\s\S]*Teacher tools/);
+test("student mode remains inside teacher tools and hides answers", () => {
+  assert.match(classroom, /aria-pressed=\{!teacherMode\}/);
+  assert.match(classroom, /teacherMode \? "Switch to student view"/);
   assert.match(classroom, /teacherMode && screen\.answers\.length/);
   assert.match(classroom, /teacherMode && state\.revealed/);
 });
@@ -63,10 +64,10 @@ test("intermediate ser/estar is a 14-screen grammar workshop plus private key", 
   assert.equal(lesson.archetype, "intermediate-grammar-workshop");
   assert.equal(lesson.screens.filter((screen) => screen.type !== "answer-key").length, 14);
   assert.deepEqual(lesson.screens.filter((screen) => screen.type !== "answer-key").map((screen) => screen.layout), [
-    "cover", "objective", "comparison", "rule-cards", "rule-cards", "multiple-choice", "sorting", "fill-gap",
-    "error-correction", "illustrated-context", "personal-prompts", "dialogue", "recap", "homework",
+    "cover", "objective", "comparison", "example-gallery", "illustrated-context", "multiple-choice", "sorting", "fill-gap",
+    "error-correction", "sentence-builder", "guided-questions", "dialogue", "recap", "homework",
   ]);
-  assert.match(JSON.stringify(lesson), /Who or what something is[\s\S]*Where something is or how it is now/);
+  assert.match(JSON.stringify(lesson), /identity and origin[\s\S]*location and state/i);
   assert.doesNotMatch(classroom, /TEACHER ANSWER \/ MODEL/);
 });
 
@@ -86,16 +87,16 @@ test("automatic archetype selection responds to level, source and focus", () => 
   assert.equal(selectLessonArchetype(request({ level: "A0", source: "La familia" })).id, "beginner-visual-topic");
   assert.equal(selectLessonArchetype(request({ level: "B1", source: "Ser y estar", lessonFocus: "grammar-focused" })).id, "intermediate-grammar-workshop");
   assert.equal(selectLessonArchetype(request({ level: "C1", source: "An ethical debate about persuasive technology" })).id, "advanced-debate");
-  assert.equal(selectLessonArchetype(request({ sourceMode: "text", source: "A source text with enough material for discussion." })).id, "source-comprehension");
+  assert.equal(selectLessonArchetype(request({
+    sourceMode: "idea",
+    source: "A source article for discussion.\nIt contains a central claim.\nIt gives two examples.\nIt ends with a conclusion.",
+  })).id, "source-comprehension");
 });
 
-test("builder exposes custom class instructions and a copy-only ChatGPT helper", () => {
-  assert.match(builder, /How should this class work\?/);
-  assert.match(builder, /Copy prompt for ChatGPT/);
-  assert.match(builder, /navigator\.clipboard\.writeText/);
-  assert.match(builder, /No direct integration and no data is sent automatically/);
-  assert.doesNotMatch(builder, /fetch\([^)]*chatgpt|openai\.com/i);
-  assert.match(builder, /CLASS PLAN[\s\S]*Approximately/);
+test("builder keeps specific instructions internal and removes the ChatGPT helper", () => {
+  assert.match(builder, /Specific instructions/);
+  assert.match(builder, /More control/);
+  assert.doesNotMatch(builder, /Copy prompt for ChatGPT|navigator\.clipboard\.writeText|chatgpt|openai\.com/i);
 });
 
 test("classroom CSS preserves 16:9 desktop fit and mobile overflow safety", () => {

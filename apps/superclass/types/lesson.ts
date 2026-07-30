@@ -1,6 +1,6 @@
 export const lessonLevels = ["A0", "A1", "A2", "B1", "B2", "C1", "C2"] as const;
 export const lessonDurations = [25, 30, 45, 50, 60, 90] as const;
-export const sourceModes = ["idea", "text", "video"] as const;
+export const sourceModes = ["idea", "video"] as const;
 export const lessonFocuses = ["conversation", "balanced", "grammar-focused", "pronunciation-focused", "source-comprehension"] as const;
 export const visualStyles = ["light-editorial", "clean-classroom", "editorial", "dark-debate", "travel", "corporate", "retro-game"] as const;
 export const lessonFormats = [
@@ -248,4 +248,9 @@ export const defaultLessonRequest: LessonRequest = {
   continueOrCorrect: "",
   recentTopics: [],
   recentVocabulary: [],
+};
+
+export const emptyLessonRequest: LessonRequest = {
+  ...defaultLessonRequest,
+  source: "",
 };

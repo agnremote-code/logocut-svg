@@ -15,6 +15,10 @@ import { validateLessonDraft } from "@/lib/validation/lesson";
 import type { LessonDraft, LessonRequest } from "@/types/lesson";
 import { languageLabel } from "@/lib/lesson/language";
 import { selectLessonArchetype } from "@/lib/lesson/archetypes";
+import { createCreativeLessonBrief } from "@/lib/lesson/creative-brief";
+import { applyInterpretedIntent, interpretLessonRequest } from "@/lib/lesson/intent";
+import type { CreativeLessonBrief } from "@/lib/lesson/creative-brief";
+import type { InterpretedLessonIntent } from "@/lib/lesson/intent";
 
 type GenerationOptions = {
   config?: ProviderConfig;
@@ -36,6 +40,8 @@ async function withTimeout(
   context: { requestId: string; contentHash: string },
   timeoutMs: number,
   repairErrors?: string[],
+  intent?: InterpretedLessonIntent,
+  creativeBrief?: CreativeLessonBrief,
 ) {
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -46,7 +52,7 @@ async function withTimeout(
         reject(new ProviderError("Lesson generation timed out. Try again.", "timeout", true));
       }, timeoutMs);
     });
-    return await Promise.race([provider.generate(request, { ...context, signal: controller.signal, repairErrors }), timeout]);
+    return await Promise.race([provider.generate(request, { ...context, signal: controller.signal, repairErrors, intent, creativeBrief }), timeout]);
   } catch (error) {
     if (controller.signal.aborted) throw new ProviderError("Lesson generation timed out. Try again.", "timeout", true);
     throw error;
@@ -55,7 +61,7 @@ async function withTimeout(
   }
 }
 
-function normalizeLesson(input: LessonDraft, request: LessonRequest, requestId: string, contentHash: string): LessonDraft {
+function normalizeLesson(input: LessonDraft, request: LessonRequest, requestId: string, contentHash: string, intent: InterpretedLessonIntent): LessonDraft {
   return {
     ...input,
     schemaVersion: 1,
@@ -67,7 +73,7 @@ function normalizeLesson(input: LessonDraft, request: LessonRequest, requestId: 
     level: request.level,
     duration: request.duration,
     visualStyle: request.visualStyle,
-    archetype: selectLessonArchetype(request).id,
+    archetype: selectLessonArchetype(request, intent).id,
     sourceMode: request.sourceMode,
     profileId: request.profileId || undefined,
     createdAt: new Date().toISOString(),
@@ -87,20 +93,23 @@ export async function generateLesson(
 ): Promise<LessonDraft> {
   const config = options.config ?? getProviderConfig();
   const provider = providerOverride ?? selectProvider(config);
+  const intent = interpretLessonRequest(request);
+  const interpretedRequest = applyInterpretedIntent(request, intent);
+  const creativeBrief = createCreativeLessonBrief(interpretedRequest, intent);
   const model = provider.name === "openai" ? config.openAiModel : provider.name;
   const requestId = randomUUID();
   const contentHash = createHash("sha256")
-    .update(JSON.stringify({ schema: 1, provider: provider.name, model, request }))
+    .update(JSON.stringify({ schema: 2, provider: provider.name, model, request: interpretedRequest, intent, creativeBrief }))
     .digest("hex")
     .slice(0, 24);
-  const activeSource = request.sourceMode === "video" ? request.transcript : request.source;
+  const activeSource = interpretedRequest.sourceMode === "video" ? interpretedRequest.transcript : interpretedRequest.source;
   if (activeSource.length > config.maxSourceChars) {
     throw new ProviderError(`Keep source material under ${config.maxSourceChars.toLocaleString()} characters.`, "source-too-large");
   }
 
   const cache =
     options.cache ?? (config.cache === "memory" ? memoryGenerationCache : disabledGenerationCache);
-  const tokens = estimateLessonTokens(request);
+  const tokens = estimateLessonTokens(interpretedRequest);
   const estimatedCostUsd = provider.name === "openai" ? estimateOpenAiCostUsd(config.openAiModel, tokens) : 0;
   const startedAt = Date.now();
   const cached = await cache.get(contentHash);
@@ -120,7 +129,7 @@ export async function generateLesson(
       createdAt: new Date().toISOString(),
     };
     recordGenerationDiagnostic(diagnostic);
-    logGeneration(createSafeGenerationLog(request, diagnostic, { screenCount: cached.screens.length }), options.logger);
+    logGeneration(createSafeGenerationLog(interpretedRequest, diagnostic, { screenCount: cached.screens.length }), options.logger);
     return { ...cached, requestId, createdAt: new Date().toISOString() };
   }
 
@@ -131,15 +140,15 @@ export async function generateLesson(
     while (attempts < 2) {
       attempts += 1;
       try {
-        const output = await withTimeout(provider, request, { requestId, contentHash }, config.timeoutMs, repairErrors);
+        const output = await withTimeout(provider, interpretedRequest, { requestId, contentHash }, config.timeoutMs, repairErrors, intent, creativeBrief);
         const structural = validateLessonDraft(output);
         validation = structural.ok ? "valid" : "invalid";
         if (!structural.ok) {
           repairErrors = structural.errors;
           throw new ProviderError(`Generated lesson failed validation: ${structural.errors.join(" ")}`, "invalid-response", attempts < 2);
         }
-        const lesson = normalizeLesson(structural.value, request, requestId, contentHash);
-        const validated = validateLessonDraft(lesson, request);
+        const lesson = normalizeLesson(structural.value, interpretedRequest, requestId, contentHash, intent);
+        const validated = validateLessonDraft(lesson, interpretedRequest);
         validation = validated.ok ? "valid" : "invalid";
         if (!validated.ok) {
           repairErrors = validated.errors;
@@ -161,7 +170,7 @@ export async function generateLesson(
           createdAt: new Date().toISOString(),
         };
         recordGenerationDiagnostic(diagnostic);
-        logGeneration(createSafeGenerationLog(request, diagnostic, { screenCount: lesson.screens.length }), options.logger);
+        logGeneration(createSafeGenerationLog(interpretedRequest, diagnostic, { screenCount: lesson.screens.length }), options.logger);
         return lesson;
       } catch (error) {
         const providerError =
@@ -192,7 +201,7 @@ export async function generateLesson(
       createdAt: new Date().toISOString(),
     };
     recordGenerationDiagnostic(diagnostic);
-    logGeneration(createSafeGenerationLog(request, diagnostic, { errorCode: providerError.code }), options.logger);
+    logGeneration(createSafeGenerationLog(interpretedRequest, diagnostic, { errorCode: providerError.code }), options.logger);
     throw providerError;
   }
 }

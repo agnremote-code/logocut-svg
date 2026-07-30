@@ -158,6 +158,8 @@ test("the requested funnel events remain wired to product surfaces", async () =>
   const files = await Promise.all(
     [
       "../components/home-page.tsx",
+      "../components/paid-landing-analytics.tsx",
+      "../components/conversion-uploader.tsx",
       "../components/conversion-studio.tsx",
       "../components/paypal-checkout.tsx",
       "../components/marketing-signup-card.tsx",
@@ -168,11 +170,22 @@ test("the requested funnel events remain wired to product surfaces", async () =>
 
   for (const eventName of [
     "homepage_view",
+    "landing_page_view",
+    "paid_landing_view",
+    "uploader_visible",
+    "file_picker_clicked",
+    "file_selected",
+    "file_accepted",
     "upload_completed",
+    "sample_demo_started",
+    "sample_preview_generated",
     "preview_requested",
     "preview_displayed",
     "checkout_viewed",
+    "checkout_clicked",
     "paypal_order_created",
+    "paypal_opened",
+    "generation_failed",
     "purchase",
     "purchase_completed",
     "svg_downloaded",

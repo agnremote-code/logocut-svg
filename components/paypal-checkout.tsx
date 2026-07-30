@@ -72,6 +72,18 @@ export function PayPalCheckout({
         operationRef.current = "order";
         setProcessing(true);
         setError("");
+        trackEvent("checkout_clicked", {
+          cut_type: cutType,
+          product_type: productType,
+          source_page: "conversion_studio",
+          value:
+            productType === "complete_pack"
+              ? 12
+              : productType === "layered_svg"
+                ? 9
+                : 5,
+          currency: "USD",
+        });
         try {
           const response = await fetch("/api/paypal/orders", {
             method: "POST",
@@ -81,6 +93,18 @@ export function PayPalCheckout({
           const payload = (await response.json()) as { orderId?: string; error?: string };
           if (!response.ok || !payload.orderId) throw new Error("order failed");
           trackEvent("paypal_order_created", {
+            cut_type: cutType,
+            product_type: productType,
+            source_page: "conversion_studio",
+            value:
+              productType === "complete_pack"
+                ? 12
+                : productType === "layered_svg"
+                  ? 9
+                  : 5,
+            currency: "USD",
+          });
+          trackEvent("paypal_opened", {
             cut_type: cutType,
             product_type: productType,
             source_page: "conversion_studio",

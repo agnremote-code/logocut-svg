@@ -18,6 +18,11 @@ const ANALYTICS_PARAM_KEYS = new Set([
   "product_type",
   "source_page",
   "source",
+  "medium",
+  "campaign",
+  "device_category",
+  "has_gclid",
+  "has_utm",
   "price",
   "file_type",
   "currency",
@@ -110,6 +115,11 @@ export function sanitizeAnalyticsParams(params: Record<string, unknown> = {}) {
     }
 
     if (typeof value === "number" && Number.isFinite(value)) {
+      clean[key] = value;
+      continue;
+    }
+
+    if (typeof value === "boolean") {
       clean[key] = value;
       continue;
     }

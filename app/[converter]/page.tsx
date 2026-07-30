@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ConversionUploader } from "@/components/conversion-uploader";
+import { PaidLandingAnalytics } from "@/components/paid-landing-analytics";
+import { PaidLandingSample } from "@/components/paid-landing-sample";
 import { SiteFooter } from "@/components/site-footer";
 import { UploaderTrigger } from "@/components/uploader-trigger";
 import {
@@ -40,7 +42,8 @@ export default async function ConverterPage({ params }: ConverterPageProps) {
   }
 
   return (
-    <main className="bg-white text-[#111827]">
+    <main className="paid-landing-page">
+      <PaidLandingAnalytics sourcePage={page.slug} />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
@@ -48,38 +51,111 @@ export default async function ConverterPage({ params }: ConverterPageProps) {
         }}
       />
 
-      <nav className="mx-auto flex w-full max-w-[1180px] items-center justify-between px-5 py-5 sm:px-6">
-        <Link className="text-sm font-semibold text-[#111827]" href="/">
+      <nav className="paid-landing-nav">
+        <Link className="paid-landing-brand" href="/">
+          <span aria-hidden="true">LC</span>
           LogoCut SVG
         </Link>
         <Link
-          className="text-sm font-semibold text-[#15803D] hover:text-[#16A34A]"
+          className="paid-landing-home-link"
           href="/"
         >
           Home
         </Link>
       </nav>
 
-      <section className="landing-hero">
-        <div className="landing-hero-inner">
-          <div>
-            <p className="hero-eyebrow">PNG & JPG TO SVG CONVERTER</p>
+      <div className="paid-landing-announcement">
+        Free preview first <span>·</span> No account <span>·</span> No
+        subscription
+      </div>
+
+      <section className="paid-landing-hero">
+        <div className="paid-landing-hero-inner">
+          <div className="paid-landing-copy">
+            <p className="paid-landing-eyebrow">
+              PNG &amp; JPG TO CRICUT-READY SVG
+            </p>
             <h1>{page.h1}</h1>
-            <p>{page.subheadline}</p>
-            <p>{page.intro}</p>
-            <UploaderTrigger
-              className="primary-button mt-5 h-[52px] w-full max-w-sm"
-              sourcePage={`${page.slug}_hero_cta`}
+            <p className="paid-landing-subheadline">{page.subheadline}</p>
+
+            <div
+              id="paid-landing-pricing"
+              className="paid-price-row"
+              aria-label="One-time pricing"
             >
-              Generate Free SVG Preview
-            </UploaderTrigger>
+              <div>
+                <span>Single-color</span>
+                <strong>$5</strong>
+              </div>
+              <div>
+                <span>Layered</span>
+                <strong>$9</strong>
+              </div>
+              <div className="paid-price-best">
+                <span>Both SVGs</span>
+                <strong>$12</strong>
+                <small>Best value</small>
+              </div>
+            </div>
+
+            <ul className="paid-landing-benefits">
+              <li>See the watermarked SVG before paying</li>
+              <li>Pay once only if the preview works for you</li>
+              <li>Download a clean, cut-ready SVG</li>
+            </ul>
           </div>
-          <ConversionUploader sourcePage={page.slug} compact />
+
+          <div className="paid-landing-uploader">
+            <div className="paid-uploader-heading">
+              <span>1</span>
+              <div>
+                <strong>Upload your image</strong>
+                <small>Your free preview comes next</small>
+              </div>
+            </div>
+            <ConversionUploader sourcePage={page.slug} compact />
+            <PaidLandingSample sourcePage={page.slug} />
+            <div className="paid-uploader-trust" aria-label="Upload assurances">
+              <span>PNG or JPG</span>
+              <span>Under 10 MB</span>
+              <span>Secure processing</span>
+            </div>
+          </div>
         </div>
       </section>
 
-      <section className="section">
+      <section className="paid-how-it-works" aria-label="How LogoCut works">
+        <div>
+          <span>1</span>
+          <p>
+            <strong>Upload</strong>
+            Choose your PNG or JPG.
+          </p>
+        </div>
+        <div>
+          <span>2</span>
+          <p>
+            <strong>Preview free</strong>
+            Review the watermarked SVG.
+          </p>
+        </div>
+        <div>
+          <span>3</span>
+          <p>
+            <strong>Unlock</strong>
+            Pay once and download clean files.
+          </p>
+        </div>
+      </section>
+
+      <section className="section paid-landing-details">
         <article className="landing-copy">
+          <section className="paid-intro-section">
+            <p className="paid-section-label">BUILT FOR REAL CUTTING PROJECTS</p>
+            <h2 className="!mt-0">Preview the conversion before you commit</h2>
+            <p>{page.intro}</p>
+          </section>
+
           {page.sections.map((section) => (
             <section key={section.heading}>
               <h2>{section.heading}</h2>
@@ -90,11 +166,12 @@ export default async function ConverterPage({ params }: ConverterPageProps) {
           ))}
 
           <div className="landing-card">
-            <h2 className="!mt-0">Preview first, then unlock</h2>
+            <h2 className="!mt-0">Simple, transparent pricing</h2>
             <p>
               Every converter page uses the same upload workflow: free
               watermarked preview first, then a $5 single-color SVG or $9
-              layered SVG only if you choose to unlock the clean file.
+              layered SVG only if you choose to unlock the clean file. Get both
+              clean versions in the Complete SVG Pack for $12.
             </p>
             <div className="landing-links" aria-label="Related converter pages">
               {page.links.map((link) => (
@@ -132,7 +209,7 @@ export default async function ConverterPage({ params }: ConverterPageProps) {
           className="primary-button mx-auto mt-7 h-[52px] w-full max-w-sm"
           sourcePage={`${page.slug}_final_cta`}
         >
-          Generate Free SVG Preview
+          Upload PNG or JPG
         </UploaderTrigger>
         <p className="mt-4 text-sm font-medium text-[#d1d5db]">
           No account · No subscription · From $5

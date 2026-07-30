@@ -5,15 +5,14 @@ export type PdfMode = "student" | "teacher";
 
 const PAGE = { width: 595.28, height: 841.89, margin: 52 };
 const colors = {
-  ink: rgb(0.08, 0.07, 0.12),
-  purple: rgb(0.28, 0.16, 0.72),
-  lime: rgb(0.72, 0.94, 0.21),
-  muted: rgb(0.38, 0.38, 0.43),
-  line: rgb(0.88, 0.87, 0.91),
+  ink: rgb(0.09, 0.2, 0.3),
+  accent: rgb(0.16, 0.49, 0.65),
+  muted: rgb(0.4, 0.44, 0.52),
+  line: rgb(0.85, 0.89, 0.93),
 };
 
 const safe = (value: string) =>
-  value.replaceAll("—", "-").replaceAll("–", "-").replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/\s+/g, " ").trim();
+  value.replaceAll("||", " / ").replaceAll("—", "-").replaceAll("–", "-").replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/\s+/g, " ").trim();
 
 export function pdfFilename(lesson: LessonDraft, mode: PdfMode) {
   const slug = lesson.title.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
@@ -54,7 +53,7 @@ export async function generateLessonPdf(lesson: LessonDraft, mode: PdfMode) {
   const addPage = (section = "") => {
     page = doc.addPage([PAGE.width, PAGE.height]);
     y = PAGE.height - PAGE.margin;
-    page.drawText("SUPERCLASS", { x: PAGE.margin, y, font: bold, size: 9, color: colors.purple });
+    page.drawText("SUPERCLASS", { x: PAGE.margin, y, font: bold, size: 9, color: colors.accent });
     page.drawText(section.toUpperCase(), { x: PAGE.width - PAGE.margin - bold.widthOfTextAtSize(section.toUpperCase(), 8), y, font: bold, size: 8, color: colors.muted });
     y -= 34;
   };
@@ -82,7 +81,7 @@ export async function generateLessonPdf(lesson: LessonDraft, mode: PdfMode) {
   const activity = (screen: LessonScreen, index: number) => {
     const estimated = 80 + screen.prompts.length * 24 + screen.vocabulary.length * 32;
     ensure(Math.min(estimated, 260), screen.title);
-    paragraph(`${String(index + 1).padStart(2, "0")}  ${screen.type.replaceAll("-", " ").toUpperCase()}  |  ${screen.timing} MIN`, { size: 8, bold: true, color: colors.purple, gap: 6 });
+    paragraph(`${String(index + 1).padStart(2, "0")}  ${screen.type.replaceAll("-", " ").toUpperCase()}  |  ${screen.timing} MIN`, { size: 8, bold: true, color: colors.accent, gap: 6 });
     paragraph(screen.title, { size: 15, bold: true, gap: 7 });
     paragraph(screen.instruction, { size: 10.5, gap: 7 });
     if (screen.sourceExcerpt) paragraph(`Source: ${screen.sourceExcerpt}`, { size: 9.5, color: colors.muted, gap: 8 });
@@ -98,21 +97,22 @@ export async function generateLessonPdf(lesson: LessonDraft, mode: PdfMode) {
       }
     });
     if (mode === "teacher") {
-      screen.answers.forEach((answer) => paragraph(`Expected answer: ${answer}`, { size: 9, color: colors.purple, indent: 12, gap: 4 }));
+      screen.answers.forEach((answer) => paragraph(`Answer or model: ${answer}`, { size: 9, color: colors.accent, indent: 12, gap: 4 }));
       screen.teacherNotes.forEach((note) => paragraph(`Teacher note: ${note}`, { size: 9, color: colors.muted, indent: 12, gap: 4 }));
     }
     y -= 8;
   };
 
-  page.drawRectangle({ x: 0, y: 0, width: PAGE.width, height: PAGE.height, color: colors.purple });
-  page.drawRectangle({ x: PAGE.margin, y: PAGE.height - 155, width: 98, height: 8, color: colors.lime });
-  page.drawText("SUPERCLASS", { x: PAGE.margin, y: PAGE.height - 110, font: bold, size: 13, color: colors.lime });
+  page.drawRectangle({ x: 0, y: 0, width: PAGE.width, height: PAGE.height, color: rgb(0.97, 0.98, 0.99) });
+  page.drawRectangle({ x: PAGE.margin, y: PAGE.height - 155, width: 98, height: 8, color: colors.accent });
+  page.drawText("SUPERCLASS", { x: PAGE.margin, y: PAGE.height - 110, font: bold, size: 13, color: colors.accent });
   const titleLines = wrap(lesson.title, bold, 34, PAGE.width - PAGE.margin * 2);
   let coverY = PAGE.height - 205;
-  titleLines.forEach((line) => { page.drawText(line, { x: PAGE.margin, y: coverY, font: bold, size: 34, color: rgb(1, 1, 1) }); coverY -= 43; });
-  page.drawText(mode === "student" ? "STUDENT WORKBOOK" : "TEACHER PACK", { x: PAGE.margin, y: coverY - 22, font: bold, size: 15, color: colors.lime });
-  page.drawText(`${lesson.language} | ${lesson.dialect} | ${lesson.level} | ${lesson.duration} minutes`, { x: PAGE.margin, y: coverY - 58, font: regular, size: 12, color: rgb(0.9, 0.88, 1) });
-  page.drawText("Ready to teach. Designed for online tutoring.", { x: PAGE.margin, y: 72, font: regular, size: 10, color: rgb(0.84, 0.82, 0.94) });
+  titleLines.forEach((line) => { page.drawText(line, { x: PAGE.margin, y: coverY, font: bold, size: 34, color: colors.ink }); coverY -= 43; });
+  page.drawText(mode === "student" ? "STUDENT WORKBOOK" : "TUTOR & TEACHER PACK", { x: PAGE.margin, y: coverY - 22, font: bold, size: 15, color: colors.accent });
+  page.drawText(`${lesson.language} | ${lesson.dialect} | ${lesson.level} | ${lesson.duration} minutes`, { x: PAGE.margin, y: coverY - 58, font: regular, size: 12, color: colors.muted });
+  page.drawText((lesson.archetype ?? "classroom lesson").replaceAll("-", " ").toUpperCase(), { x: PAGE.margin, y: coverY - 84, font: bold, size: 9, color: colors.accent });
+  page.drawText("Describe the class. Open it. Teach it.", { x: PAGE.margin, y: 72, font: regular, size: 10, color: colors.muted });
 
   addPage(mode === "student" ? "Workbook overview" : "Lesson overview");
   heading("Lesson objectives");
@@ -135,7 +135,7 @@ export async function generateLessonPdf(lesson: LessonDraft, mode: PdfMode) {
 
   const pages = doc.getPages();
   pages.forEach((item, index) => {
-    item.drawText(`${index + 1} / ${pages.length}`, { x: PAGE.width - PAGE.margin - 30, y: 28, font: regular, size: 8, color: index === 0 ? rgb(0.8, 0.78, 0.9) : colors.muted });
+    item.drawText(`${index + 1} / ${pages.length}`, { x: PAGE.width - PAGE.margin - 30, y: 28, font: regular, size: 8, color: colors.muted });
   });
   doc.setTitle(`${lesson.title} - ${mode === "student" ? "Student Workbook" : "Teacher Pack"}`);
   doc.setAuthor("Superclass");

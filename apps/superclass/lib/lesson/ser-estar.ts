@@ -1,4 +1,4 @@
-import { normalizeActivityTiming, targetScreenCount } from "@/lib/lesson/duration";
+import { normalizeActivityTiming } from "@/lib/lesson/duration";
 import { effectiveLanguageMode } from "@/lib/lesson/language";
 import type { LessonRequest, LessonScreen, ScreenLayout, ScreenType } from "@/types/lesson";
 
@@ -46,10 +46,10 @@ export function buildSerEstarScreens(request: LessonRequest) {
     timing: 3,
   });
   add("microgrammar", "comparison", "Dos verbos, dos funciones", support("Compara las categorías. No memorices una regla de «permanente vs temporal».", "Compare the jobs; avoid an oversimplified permanent/temporary rule."), {
-    body: "SER → identidad, origen, profesión, características generales. ESTAR → ubicación, estado, emociones, condición actual.",
+    body: "SER → Quién o qué algo es. ESTAR → Dónde está algo o cómo está ahora.",
     prompts: ["SER: ¿quién o qué es?", "ESTAR: ¿dónde o cómo está?"],
-    answers: ["SER describes identity/classification; ESTAR locates or presents a state/condition."],
-    teacherNotes: ["Use the stable violet SER accent and coral ESTAR accent."],
+    answers: ["SER: Who or what something is. ESTAR: Where something is or how it is now."],
+    teacherNotes: ["Use the stable blue SER accent and warm yellow ESTAR accent."],
     timing: 5,
   });
   add("microgrammar", "rule-cards", "Los trabajos de SER", support("Observa los cuatro usos centrales.", "Notice the four core uses."), {
@@ -64,22 +64,16 @@ export function buildSerEstarScreens(request: LessonRequest) {
     teacherNotes: ["Point out that location normally uses ESTAR, even when it is not temporary."],
     timing: 5,
   });
-  add("controlled-practice", "example-gallery", "Mira el significado", support("El verbo cambia la perspectiva.", "The verb changes the perspective."), {
-    prompts: ["Ana es lista. / Ana está lista.", "La manzana es verde. / La manzana está verde.", "Él es aburrido. / Él está aburrido."],
-    answers: ["clever/ready", "green/unripe", "boring/bored"],
-    teacherNotes: ["Elicit the meaning before giving the English support."],
+  add("controlled-practice", "multiple-choice", "Elige el verbo", support("Decide y explica qué pregunta responde: quién, de dónde, dónde o cómo.", "Choose and explain the meaning."), {
+    prompts: ["Mi hermana ___ arquitecta.", "Nosotros ___ en la oficina.", "Yo ___ nervioso hoy.", "Ellas ___ de Colombia."],
+    answers: ["es", "estamos", "estoy", "son"],
+    teacherNotes: ["Reveal answers only after the learner commits."],
     timing: 5,
   });
   add("controlled-practice", "sorting", "Clasifica: SER o ESTAR", support("Selecciona una categoría para cada situación.", "Sort each situation into a category."), {
     prompts: ["Mi profesión", "La ubicación del café", "Mi emoción hoy", "El país de origen"],
     answers: ["SER", "ESTAR", "ESTAR", "SER"],
     teacherNotes: ["Ask for a full example after each choice."],
-    timing: 5,
-  });
-  add("controlled-practice", "multiple-choice", "Elige el verbo", support("Decide y explica qué pregunta responde: quién, de dónde, dónde o cómo.", "Choose and explain the meaning."), {
-    prompts: ["Mi hermana ___ arquitecta.", "Nosotros ___ en la oficina.", "Yo ___ nervioso hoy.", "Ellas ___ de Colombia."],
-    answers: ["es", "estamos", "estoy", "son"],
-    teacherNotes: ["Reveal answers only after the learner commits."],
     timing: 5,
   });
   add("controlled-practice", "fill-gap", "Completa la frase", support("Conjuga ser o estar en presente.", "Complete with the present-tense form."), {
@@ -120,33 +114,12 @@ export function buildSerEstarScreens(request: LessonRequest) {
     teacherNotes: ["Aim for automatic recall, then one concise explanation."],
     timing: 3,
   });
-  add("exit-task", "recap", "Mapa final", support("Completa la regla con tus propias palabras.", "Complete the rule in your own words."), {
-    prompts: ["Uso SER para…", "Uso ESTAR para…", "Un ejemplo importante para mí es…"],
-    answers: ["SER: identity/origin/profession/general characteristics. ESTAR: location/state/emotion/current condition."],
-    teacherNotes: ["Compare with the objective and record one next step."],
-    timing: 3,
+  add("homework", "homework", "Tarea: mi mundo con SER y ESTAR", support("Escribe ocho frases y revisa el verbo.", "Write eight sentences and check the verb."), {
+    prompts: ["2 frases de identidad u origen", "2 de profesión o características", "2 de ubicación", "2 de emociones o condiciones"],
+    answers: ["Teacher check: correct verb, conjugation and meaning category."],
+    teacherNotes: ["Ask the learner to label each category."],
+    timing: 2,
   });
-  if (request.includeHomework) {
-    add("homework", "homework", "Tarea: mi mundo con SER y ESTAR", support("Escribe ocho frases y revisa el verbo.", "Write eight sentences and check the verb."), {
-      prompts: ["2 frases de identidad u origen", "2 de profesión o características", "2 de ubicación", "2 de emociones o condiciones"],
-      answers: ["Teacher check: correct verb, conjugation and meaning category."],
-      teacherNotes: ["Ask the learner to label each category."],
-      timing: 2,
-    });
-  }
-
-  const targetBeforeKey = targetScreenCount(request.duration) - 1;
-  let round = 1;
-  while (screens.length < targetBeforeKey) {
-    add("controlled-practice", round % 2 ? "sentence-builder" : "multiple-choice", `Práctica enfocada ${round}`, support("Construye una frase precisa con el contexto.", "Build one accurate contextual sentence."), {
-      prompts: [`persona + profesión + ${round}`, `lugar + condición + ${round}`],
-      answers: ["Use SER for profession; use ESTAR for location/condition."],
-      teacherNotes: ["Keep every added practice round directly on the ser/estar contrast."],
-      timing: 4,
-    });
-    round += 1;
-  }
-  while (screens.length > targetBeforeKey) screens.splice(screens.length - (request.includeHomework ? 1 : 0) - 1, 1);
   add("answer-key", "recap", "Respuestas y evidencia", "Material privado para el docente.", {
     body: "SER: identidad, origen, profesión y características. ESTAR: ubicación, estado, emoción y condición.",
     answers: screens.flatMap((screen) => screen.answers).slice(0, 18),

@@ -47,6 +47,8 @@ export function buildLessonPrompt(request: LessonRequest, repairErrors: string[]
       difficulties: request.difficulties,
       skillsFocus: request.skillsFocus,
       lessonFocus: request.lessonFocus,
+      lessonFormat: request.lessonFormat,
+      customClassInstructions: request.customClassInstructions,
       practiceDensity: request.practiceDensity,
       visualStyle: request.visualStyle,
       includeHomework: request.includeHomework,

@@ -178,14 +178,14 @@ export function LessonApp() {
 
       <section className="hero" id="top">
         <div className="hero-copy">
-          <span className="hero-kicker">DESIGNED LESSON SOFTWARE FOR LANGUAGE TEACHERS</span>
-          <h1>Create Classes Students Remember</h1>
-          <p>Turn any topic, text or video into a designed interactive lesson, student workbook and teacher pack.</p>
+          <span className="hero-kicker">MADE FOR TUTORS AND TEACHERS</span>
+          <h1>Describe the class. Open it. Teach it.</h1>
+          <p>Interactive lesson software for online tutors and language teachers. Turn any topic, text or video into a presentable class, student workbook and teacher pack.</p>
           <div className="hero-actions">
             <button className="primary-button" type="button" onClick={scrollToBuilder}>Create My Next Class</button>
-            <button className="text-button" type="button" onClick={() => selectPreset("b1-abroad", true)}>Open a Demo <span>→</span></button>
+            <button className="text-button" type="button" onClick={() => selectPreset("a0-buenos-aires", true)}>Open a Demo <span>→</span></button>
           </div>
-          <p className="platform-line">For independent tutors and online language teachers.</p>
+          <p className="platform-line">For private tutors, independent teachers and educators working through Preply, italki and similar platforms. No affiliation implied.</p>
         </div>
         <div className="hero-visual" aria-label="Example lesson flow">
           <div className="visual-window">
@@ -194,7 +194,7 @@ export function LessonApp() {
             <div className="visual-card card-two"><small>MEANING MAP</small><div><b>identity</b><b>location</b><b>state</b></div></div>
             <div className="visual-strip"><span className="active">01</span><span>02</span><span>03</span><span>04</span><span>18</span></div>
           </div>
-          <div className="floating-note"><b>Teacher note</b><span>Give 20 seconds to plan. Save correction until the end.</span></div>
+          <div className="floating-note"><b>Ready to present</b><span>Simple navigation. Teacher tools stay closed until you need them.</span></div>
         </div>
       </section>
 

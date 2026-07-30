@@ -1,5 +1,6 @@
 import { languageContract } from "@/lib/lesson/language";
-import type { LessonRequest, ScreenLayout } from "@/types/lesson";
+import { selectLessonArchetype } from "@/lib/lesson/archetypes";
+import type { LessonArchetype, LessonRequest, ScreenLayout } from "@/types/lesson";
 
 export type TopicType = "grammar" | "vocabulary" | "conversation" | "pronunciation" | "reading" | "listening" | "source-comprehension" | "professional-language";
 
@@ -13,6 +14,9 @@ export type LessonPlan = {
   requiredKeywords: string[];
   prohibitedContent: string[];
   activitySequence: ScreenLayout[];
+  archetype: LessonArchetype;
+  imageSlotPlan: string;
+  customInstructions: string;
   specializedTemplate?: "ser-estar" | "present-tense" | "preterite-imperfect" | "por-para" | "subjunctive" | "articles" | "gender-number" | "questions";
 };
 
@@ -44,11 +48,8 @@ export function createLessonPlan(request: LessonRequest): LessonPlan {
           : /job|interview|work|business|professional/.test(normalizedTopic) ? "professional-language"
             : /vocab|famil(?:y|ia)|words|palabras/.test(normalizedTopic) ? "vocabulary"
               : "conversation";
-  const sequence: ScreenLayout[] = topicType === "grammar"
-    ? ["cover", "objective", "comparison", "rule-cards", "example-gallery", "sorting", "multiple-choice", "fill-gap", "error-correction", "illustrated-context", "personal-prompts", "dialogue", "recap", "homework"]
-    : ["cover", "objective", "illustrated-context", "vocabulary-cards", "example-gallery", "multiple-choice", "personal-prompts", "dialogue", "recap", "homework"];
-
   const serEstar = specializedTemplate === "ser-estar";
+  const archetype = selectLessonArchetype(request);
   return {
     exactTopic,
     normalizedTopic,
@@ -64,7 +65,10 @@ export function createLessonPlan(request: LessonRequest): LessonPlan {
       ? ["ser", "estar", "soy", "es", "son", "estoy", "está", "están", "identidad", "origen", "profesión", "características", "ubicación", "condición", "emociones"]
       : normalizedTopic.split(/\s+/).filter((word) => word.length > 3).slice(0, 6),
     prohibitedContent: /living abroad|vivir en el extranjero/.test(normalizedTopic) ? [] : ["living abroad", "adapting to a new culture", "culture shock"],
-    activitySequence: sequence,
+    activitySequence: archetype.allowedLayouts,
+    archetype: archetype.id,
+    imageSlotPlan: archetype.imageUsage,
+    customInstructions: request.customClassInstructions,
     specializedTemplate,
   };
 }

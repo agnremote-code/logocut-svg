@@ -14,6 +14,7 @@ import { ProviderError, type LessonProvider } from "@/lib/providers/types";
 import { validateLessonDraft } from "@/lib/validation/lesson";
 import type { LessonDraft, LessonRequest } from "@/types/lesson";
 import { languageLabel } from "@/lib/lesson/language";
+import { selectLessonArchetype } from "@/lib/lesson/archetypes";
 
 type GenerationOptions = {
   config?: ProviderConfig;
@@ -66,6 +67,7 @@ function normalizeLesson(input: LessonDraft, request: LessonRequest, requestId: 
     level: request.level,
     duration: request.duration,
     visualStyle: request.visualStyle,
+    archetype: selectLessonArchetype(request).id,
     sourceMode: request.sourceMode,
     profileId: request.profileId || undefined,
     createdAt: new Date().toISOString(),

@@ -2,15 +2,15 @@ export function MarketingSections({ onCreate }: { onCreate: () => void }) {
   return (
     <>
       <section className="marketing-section audience-section">
-        <div><span className="section-kicker">WHO IT IS FOR</span><h2>Built for the way online tutors actually teach</h2><p>Useful whether you teach privately or through an online tutoring marketplace.</p></div>
+        <div><span className="section-kicker">WHO IT IS FOR</span><h2>Built for the way tutors and teachers actually teach</h2><p>Useful whether you teach privately, independently, through an online tutoring marketplace or in an online language school.</p></div>
         <div className="feature-grid">
           {[
             ["Independent tutors", "Personalized one-to-one classes without rebuilding every resource."],
-            ["Preply tutors", "Fits the workflow of tutors teaching through Preply and messaging students after class."],
-            ["italki teachers", "Designed for teachers who use italki alongside their own lesson workspace."],
-            ["Language schools", "Consistent teacher packs and student-ready materials across online classes."],
-            ["Conversation teachers", "Interactive prompts, speaking challenges and correction continuity."],
-            ["Exam and professional-language teachers", "Structured practice, evidence, answer keys and focused follow-up."],
+            ["Preply tutors", "Fits tutors who teach through Preply and message students after class. No platform affiliation."],
+            ["italki teachers", "Fits teachers who use italki alongside their own lesson workspace. No platform affiliation."],
+            ["Language schools", "Consistent tutor and teacher packs with student-ready materials."],
+            ["Conversation tutors and teachers", "Interactive prompts, speaking challenges and correction continuity."],
+            ["Exam and professional-language educators", "Structured practice, evidence, answer keys and focused follow-up."],
           ].map(([title, copy]) => <article key={title}><h3>{title}</h3><p>{copy}</p></article>)}
         </div>
       </section>
@@ -20,7 +20,7 @@ export function MarketingSections({ onCreate }: { onCreate: () => void }) {
         <div className="step-grid">
           <article><b>01</b><h3>Give it context</h3><p>Start with an idea, source text, transcript or video—then add what this student actually needs.</p></article>
           <article><b>02</b><h3>Get a coherent lesson</h3><p>Superclass adapts structure, language support, timing and practice to the level and goal.</p></article>
-          <article><b>03</b><h3>Edit or present</h3><p>Tune any screen, keep private notes, switch to classroom mode, or print teacher and student versions.</p></article>
+          <article><b>03</b><h3>Open it and teach</h3><p>Present immediately, open compact Teacher tools only when needed, or print tutor/teacher and student versions.</p></article>
         </div>
       </section>
 
@@ -47,12 +47,12 @@ export function MarketingSections({ onCreate }: { onCreate: () => void }) {
       </section>
 
       <section className="marketing-section">
-        <span className="section-kicker">BUILT FOR REAL TEACHERS</span>
+        <span className="section-kicker">BUILT FOR TUTORS AND TEACHERS</span>
         <h2>The details that save prep time</h2>
         <div className="feature-grid">
           {[
             ["Level intelligence", "A0 scaffolding is materially different from a C1 debate."],
-            ["Private teacher mode", "Keep timing, expected answers and correction ideas away from students."],
+            ["Teacher tools on demand", "Keep timing, useful models and optional correction away from students until needed."],
             ["Source grounding", "Comprehension and evidence stay attached to the material you supplied."],
             ["Lesson Player", "Teach through interactive activities with keyboard navigation and private guidance."],
             ["Local student profiles", "Carry goals, corrections and recent lesson continuity without an account."],
@@ -65,7 +65,7 @@ export function MarketingSections({ onCreate }: { onCreate: () => void }) {
         <div><span className="section-kicker">PRICING PREVIEW</span><h2>Pay for finished lessons, not another blank workspace.</h2></div>
         <div className="price-grid">
           <article><small>ONE COMPLETE LESSON</small><strong>$5</strong><p>One ready-to-teach lesson and both print versions.</p></article>
-          <article className="popular"><small>FIVE-LESSON PACK</small><strong>$15</strong><p>For teachers preparing several personalized classes.</p></article>
+          <article className="popular"><small>FIVE-LESSON PACK</small><strong>$15</strong><p>For tutors and teachers preparing several personalized classes.</p></article>
           <article><small>MONTHLY TEACHER PLAN</small><strong>Coming later</strong><p>Accounts, cloud history and reusable student profiles.</p></article>
         </div>
         <p className="pricing-note">Preview only. Payments are not connected in this demo.</p>

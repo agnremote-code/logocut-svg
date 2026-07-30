@@ -218,13 +218,14 @@ export function LessonWorkspace({ lesson, onChange, onNew, onSaveToProfile }: Pr
           )}
         </div>
 
-        <aside className="teacher-panel">
-          <div><span>TEACHER MODE</span><b>{screen.timing} min</b></div>
-          <h3>Private guidance</h3>
-          {screen.teacherNotes.length ? screen.teacherNotes.map((note) => <p key={note}>{note}</p>) : <p>Add private notes in edit mode.</p>}
-          {screen.answers.length > 0 && <details><summary>Expected answers</summary>{screen.answers.map((answer) => <p key={answer}>{answer}</p>)}</details>}
-        </aside>
       </div>
+      <details className="workspace-teacher-tools">
+        <summary>Teacher tools</summary>
+        <div><small>Suggested time</small><p>{screen.timing} minutes</p></div>
+        {screen.teacherNotes[0] && <div><small>Goal</small><p>{screen.teacherNotes[0]}</p></div>}
+        {screen.answers[0] && <div><small>Answer or model</small><p>{screen.answers[0]}</p></div>}
+        {screen.teacherNotes[1] && <div><small>Optional correction</small><p>{screen.teacherNotes[1]}</p></div>}
+      </details>
 
       {lockedCount > 0 && (
         <div className="unlock-banner">

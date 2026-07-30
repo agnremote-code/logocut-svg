@@ -79,7 +79,7 @@ export function buildAdvancedScreens(request: LessonRequest, topic: string, arch
       answers: ["Teacher check: clarity, evidence, qualification and register."],
     });
   }
-  const beforeKey = targetScreenCount(request.duration) - 1;
+  const beforeKey = targetScreenCount(request.duration, request.level) - 1;
   let round = 1;
   while (screens.length < beforeKey) {
     add(round % 2 ? "debate" : "discussion", round % 2 ? "debate-cards" : "personal-prompts", `Pressure test ${round}`, "Change one assumption and revise your position.", {

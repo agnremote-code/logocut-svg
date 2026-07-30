@@ -110,7 +110,7 @@ export const lessonDraftJsonSchema = {
         },
       },
     },
-    sourceMode: { type: "string", enum: ["idea", "text", "video"] },
+    sourceMode: { type: "string", enum: ["idea", "video"] },
     createdAt: { type: "string" },
     suggestedNextLesson: { type: "string" },
     levelSignals: stringArray,

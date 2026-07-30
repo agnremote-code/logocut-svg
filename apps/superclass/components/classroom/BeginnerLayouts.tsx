@@ -1,6 +1,7 @@
 "use client";
 
 import type { LessonScreen } from "@/types/lesson";
+import { VisualComposition } from "@/components/classroom/VisualComposition";
 
 export function BilingualText({ value }: { value: string }) {
   const [target, support] = value.split("||").map((part) => part.trim());
@@ -13,9 +14,9 @@ export function TopicMenu({ screen }: { screen: LessonScreen }) {
 
 export function ImageTopicCard({ screen }: { screen: LessonScreen }) {
   return <div className="image-topic-card">
-    <div className="owned-lesson-illustration" role="img" aria-label="Designed lesson illustration">{screen.body}</div>
+    <VisualComposition screen={screen} purpose="practice-context" />
     <div>{screen.prompts.map((item) => <p key={item}><BilingualText value={item} /></p>)}</div>
-    <small>Designed illustration · included with this lesson</small>
+    {screen.body && <small>{screen.body}</small>}
   </div>;
 }
 

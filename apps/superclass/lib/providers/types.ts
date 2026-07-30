@@ -1,10 +1,14 @@
 import type { LessonDraft, LessonRequest } from "@/types/lesson";
+import type { CreativeLessonBrief } from "@/lib/lesson/creative-brief";
+import type { InterpretedLessonIntent } from "@/lib/lesson/intent";
 
 export type ProviderContext = {
   requestId: string;
   contentHash: string;
   signal?: AbortSignal;
   repairErrors?: string[];
+  intent?: InterpretedLessonIntent;
+  creativeBrief?: CreativeLessonBrief;
 };
 
 export interface LessonProvider<Output = unknown> {

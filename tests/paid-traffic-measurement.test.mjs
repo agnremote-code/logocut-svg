@@ -6,6 +6,12 @@ import {
   parsePaidBeaconPayload,
   preserveQueryOnCanonicalUrl,
 } from "../lib/paid-traffic-receipt.ts";
+import { flushQueuedAnalyticsEvents } from "../lib/analytics-queue.ts";
+import {
+  getGaCampaignFields,
+  getGaPageLocation,
+} from "../lib/ga-attribution.ts";
+import { sanitizeAnalyticsEventParams } from "../lib/analytics-payload.ts";
 
 async function source(path) {
   return readFile(new URL(path, import.meta.url), "utf8");
@@ -22,7 +28,7 @@ test("explicit page_view is deduplicated and GA config is issued once", async ()
   assert.equal((layout.match(/window\.gtag\('config'/g) ?? []).length, 1);
   assert.equal((provider.match(/trackPageViewOnce\(/g) ?? []).length, 1);
   assert.match(layout, /send_page_view: false/);
-  assert.match(layout, /page_location: window\.location\.origin \+ window\.location\.pathname/);
+  assert.match(layout, /page_location: window\.location\.href\.split\('#'\)\[0\]/);
 });
 
 test("pre-load events queue until the external GA library is ready", async () => {
@@ -38,6 +44,57 @@ test("pre-load events queue until the external GA library is ready", async () =>
   assert.match(layout, /strategy="beforeInteractive"/);
   assert.match(provider, /onLoad=\{\(\) => \{/);
   assert.match(provider, /markAnalyticsReady\(\)/);
+});
+
+test("queued analytics events flush once", () => {
+  const queue = [
+    { eventName: "page_view", params: { page_path: "/png-to-svg" } },
+    { eventName: "paid_landing_view", params: { has_gclid: true } },
+  ];
+  const dispatched = [];
+
+  assert.equal(
+    flushQueuedAnalyticsEvents(queue, (event) => dispatched.push(event)),
+    2,
+  );
+  assert.equal(queue.length, 0);
+  assert.equal(
+    flushQueuedAnalyticsEvents(queue, (event) => dispatched.push(event)),
+    0,
+  );
+  assert.deepEqual(
+    dispatched.map((event) => event.eventName),
+    ["page_view", "paid_landing_view"],
+  );
+});
+
+test("GA page location preserves campaign attribution and removes only the fragment", () => {
+  assert.equal(
+    getGaPageLocation(
+      "https://www.logocutsvg.com/png-to-svg?utm_source=google&utm_medium=cpc&utm_campaign=measurement_test&utm_term=png%20to%20svg&utm_content=ad-1&gclid=TEST_ATTRIBUTION_VALUE&gbraid=TEST_GBRAID&wbraid=TEST_WBRAID#studio",
+    ),
+    "https://www.logocutsvg.com/png-to-svg?utm_source=google&utm_medium=cpc&utm_campaign=measurement_test&utm_term=png%20to%20svg&utm_content=ad-1&gclid=TEST_ATTRIBUTION_VALUE&gbraid=TEST_GBRAID&wbraid=TEST_WBRAID",
+  );
+});
+
+test("UTMs map to GA campaign fields without click identifiers", () => {
+  const campaignFields = getGaCampaignFields({
+    utm_source: "google",
+    utm_medium: "cpc",
+    utm_campaign: "measurement_test",
+    utm_term: "png to svg",
+    utm_content: "responsive_ad",
+    gclid: "TEST_ATTRIBUTION_VALUE",
+  });
+
+  assert.deepEqual(campaignFields, {
+    campaign_source: "google",
+    campaign_medium: "cpc",
+    campaign_name: "measurement_test",
+    campaign_term: "png to svg",
+    campaign_content: "responsive_ad",
+  });
+  assert.doesNotMatch(JSON.stringify(campaignFields), /TEST_ATTRIBUTION_VALUE/);
 });
 
 test("paid request receipt records safe flags without raw click identifiers", () => {
@@ -161,15 +218,38 @@ test("structured measurement code never logs forbidden request data", async () =
   assert.match(route, /body\.length > 2048/);
 });
 
-test("GA payloads use click-presence flags and sanitized page locations", async () => {
+test("custom GA events use click-presence flags without raw click identifiers", async () => {
   const analytics = await source("../lib/analytics.ts");
   const payload = await source("../lib/analytics-payload.ts");
 
   assert.match(analytics, /has_gclid: Boolean/);
-  assert.match(analytics, /window\.location\.origin/);
+  assert.match(analytics, /sanitizeAnalyticsEventParams\(eventName/);
   assert.doesNotMatch(payload, /^\s*"gclid",/m);
   assert.doesNotMatch(payload, /^\s*"gbraid",/m);
   assert.doesNotMatch(payload, /^\s*"wbraid",/m);
+  assert.doesNotMatch(payload, /^\s*"utm_source",/m);
+  assert.match(payload, /^\s*"campaign_source",/m);
+
+  const customEvent = sanitizeAnalyticsEventParams("paid_landing_view", {
+    campaign_source: "google",
+    campaign_medium: "cpc",
+    has_gclid: true,
+    gclid: "TEST_ATTRIBUTION_VALUE",
+    page_location:
+      "https://www.logocutsvg.com/png-to-svg?gclid=TEST_ATTRIBUTION_VALUE",
+  });
+  assert.deepEqual(customEvent, {
+    campaign_source: "google",
+    campaign_medium: "cpc",
+    has_gclid: true,
+  });
+  assert.doesNotMatch(JSON.stringify(customEvent), /TEST_ATTRIBUTION_VALUE/);
+
+  const pageView = sanitizeAnalyticsEventParams("page_view", {
+    page_location:
+      "https://www.logocutsvg.com/png-to-svg?gclid=TEST_ATTRIBUTION_VALUE",
+  });
+  assert.match(pageView.page_location, /gclid=TEST_ATTRIBUTION_VALUE/);
 });
 
 test("sample and purchase protections remain unchanged", async () => {

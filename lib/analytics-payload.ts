@@ -43,11 +43,11 @@ const ANALYTICS_PARAM_KEYS = new Set([
   "page_title",
   "page_referrer",
   "debug_mode",
-  "utm_source",
-  "utm_medium",
-  "utm_campaign",
-  "utm_content",
-  "utm_term",
+  "campaign_source",
+  "campaign_medium",
+  "campaign_name",
+  "campaign_content",
+  "campaign_term",
   "items",
 ]);
 
@@ -133,6 +133,20 @@ export function sanitizeAnalyticsParams(params: Record<string, unknown> = {}) {
     ) {
       clean[key] = value;
     }
+  }
+
+  return clean;
+}
+
+export function sanitizeAnalyticsEventParams(
+  eventName: string,
+  params: Record<string, unknown> = {},
+) {
+  const clean = sanitizeAnalyticsParams(params);
+
+  if (eventName !== "page_view") {
+    delete clean.page_location;
+    delete clean.page_referrer;
   }
 
   return clean;

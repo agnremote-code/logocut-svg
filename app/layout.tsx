@@ -31,7 +31,7 @@ const gaBootstrap = gaMeasurementId
           send_page_view: false,
           allow_google_signals: false,
           allow_ad_personalization_signals: false,
-          page_location: window.location.origin + window.location.pathname,
+          page_location: window.location.href.split('#')[0],
           page_referrer: logocutReferrer
         });
         window.__logocutGaConfigured = ${JSON.stringify(gaMeasurementId)};

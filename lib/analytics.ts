@@ -1,11 +1,16 @@
 "use client";
 
 import { CutType, OneTimeProductType } from "@/lib/job-types";
-import { getCurrentAttribution, PaidAttribution } from "@/lib/attribution";
+import { getCurrentAttribution } from "@/lib/attribution";
 import {
   createPurchaseAnalyticsParams,
-  sanitizeAnalyticsParams,
+  sanitizeAnalyticsEventParams,
 } from "@/lib/analytics-payload";
+import { flushQueuedAnalyticsEvents } from "@/lib/analytics-queue";
+import {
+  getGaCampaignFields,
+  getGaPageLocation,
+} from "@/lib/ga-attribution";
 import { recordFunnelDiagnostic } from "@/lib/funnel-diagnostics";
 
 type AnalyticsEventName =
@@ -84,8 +89,13 @@ type AnalyticsParams = {
   page_title?: string;
   page_referrer?: string;
   debug_mode?: boolean;
+  campaign_source?: string;
+  campaign_medium?: string;
+  campaign_name?: string;
+  campaign_content?: string;
+  campaign_term?: string;
   items?: AnalyticsItem[];
-} & PaidAttribution;
+};
 
 type AnalyticsItem = {
   item_id: string;
@@ -147,11 +157,7 @@ function getSafeAttributionParams() {
   const pagePath = window.location.pathname;
 
   return {
-    utm_source: attribution.utm_source,
-    utm_medium: attribution.utm_medium,
-    utm_campaign: attribution.utm_campaign,
-    utm_content: attribution.utm_content,
-    utm_term: attribution.utm_term,
+    ...getGaCampaignFields(attribution),
     has_gclid: Boolean(
       attribution.gclid || attribution.gbraid || attribution.wbraid,
     ),
@@ -162,7 +168,6 @@ function getSafeAttributionParams() {
         attribution.utm_content ||
         attribution.utm_term,
     ),
-    page_location: `${window.location.origin}${pagePath}`,
     page_path: pagePath,
   };
 }
@@ -192,12 +197,14 @@ export function trackEvent(
     return false;
   }
 
-  const cleanParams = sanitizeAnalyticsParams({
+  const cleanParams = sanitizeAnalyticsEventParams(eventName, {
     ...getSafeAttributionParams(),
     ...params,
   });
 
-  recordFunnelDiagnostic(eventName, cleanParams);
+  const diagnosticParams = { ...cleanParams };
+  delete diagnosticParams.page_location;
+  recordFunnelDiagnostic(eventName, diagnosticParams);
 
   if (!process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim()) {
     updateDiagnostics({ lastDispatchStatus: "blocked" });
@@ -232,14 +239,12 @@ export function flushAnalyticsQueue() {
   }
 
   const queue = window.__logocutAnalyticsQueue ?? [];
-  window.__logocutAnalyticsQueue = [];
-
-  for (const event of queue) {
-    dispatchToGa(event.eventName, event.params);
-  }
+  const flushedCount = flushQueuedAnalyticsEvents(queue, (event) => {
+    dispatchToGa(event.eventName as AnalyticsEventName, event.params);
+  });
 
   updateDiagnostics({ queueLength: 0 });
-  return queue.length;
+  return flushedCount;
 }
 
 export function markAnalyticsReady() {
@@ -298,7 +303,7 @@ export function trackPageViewOnce(params: { debug_mode?: boolean } = {}) {
   }
 
   const accepted = trackEvent("page_view", {
-    page_location: `${window.location.origin}${pagePath}`,
+    page_location: getGaPageLocation(window.location.href),
     page_path: pagePath,
     page_title: document.title.slice(0, 200),
     page_referrer: stripSearchAndHash(document.referrer),

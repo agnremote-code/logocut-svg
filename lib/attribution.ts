@@ -18,18 +18,22 @@ type StoredAttribution = PaidAttribution & {
   captured_at: number;
 };
 
-const ATTRIBUTION_KEYS = [
+const UTM_KEYS = [
   "utm_source",
   "utm_medium",
   "utm_campaign",
   "utm_content",
   "utm_term",
+] as const;
+
+const CLICK_ID_KEYS = [
   "gclid",
   "gbraid",
   "wbraid",
 ] as const;
 
-const CLICK_ID_KEYS = new Set(["gclid", "gbraid", "wbraid"]);
+const ATTRIBUTION_KEYS = [...UTM_KEYS, ...CLICK_ID_KEYS] as const;
+const CLICK_ID_KEY_SET = new Set<string>(CLICK_ID_KEYS);
 
 function sanitizeAttributionValue(key: string, value: string | null) {
   if (!value) {
@@ -37,7 +41,7 @@ function sanitizeAttributionValue(key: string, value: string | null) {
   }
 
   const trimmed = value.trim();
-  const maxLength = CLICK_ID_KEYS.has(key) ? 256 : 120;
+  const maxLength = CLICK_ID_KEY_SET.has(key) ? 256 : 120;
 
   if (
     !trimmed ||
@@ -49,7 +53,7 @@ function sanitizeAttributionValue(key: string, value: string | null) {
     return undefined;
   }
 
-  if (CLICK_ID_KEYS.has(key) && !/^[A-Za-z0-9._~-]+$/.test(trimmed)) {
+  if (CLICK_ID_KEY_SET.has(key) && !/^[A-Za-z0-9._~-]+$/.test(trimmed)) {
     return undefined;
   }
 
@@ -107,7 +111,7 @@ export function readStoredAttribution(
     }
 
     return Object.fromEntries(
-      ATTRIBUTION_KEYS.flatMap((key) => {
+      UTM_KEYS.flatMap((key) => {
         const value = sanitizeAttributionValue(
           key,
           typeof stored[key] === "string" ? stored[key] : null,
@@ -132,22 +136,45 @@ export function resolveAttribution({
 }) {
   const incoming = parseAttributionSearch(search);
   const hasIncoming = Object.keys(incoming).length > 0;
+  const storedAttribution = readStoredAttribution(storedValue, now);
+  const safeStoredValue = Object.keys(storedAttribution).length
+    ? JSON.stringify({
+        ...storedAttribution,
+        captured_at: (() => {
+          try {
+            const capturedAt = JSON.parse(storedValue ?? "null")?.captured_at;
+            return typeof capturedAt === "number" ? capturedAt : now;
+          } catch {
+            return now;
+          }
+        })(),
+      } satisfies StoredAttribution)
+    : null;
 
   if (hasIncoming && !isDirectMarker(incoming)) {
+    const persistableIncoming = Object.fromEntries(
+      UTM_KEYS.flatMap((key) =>
+        incoming[key] ? [[key, incoming[key]]] : [],
+      ),
+    ) as PaidAttribution;
+    const nextStoredValue = Object.keys(persistableIncoming).length
+      ? JSON.stringify({
+          ...persistableIncoming,
+          captured_at: now,
+        } satisfies StoredAttribution)
+      : safeStoredValue;
+
     return {
       attribution: incoming,
-      storedValue: JSON.stringify({
-        ...incoming,
-        captured_at: now,
-      } satisfies StoredAttribution),
-      shouldPersist: true,
+      storedValue: nextStoredValue,
+      shouldPersist: nextStoredValue !== storedValue,
     };
   }
 
   return {
-    attribution: readStoredAttribution(storedValue, now),
-    storedValue,
-    shouldPersist: false,
+    attribution: storedAttribution,
+    storedValue: safeStoredValue,
+    shouldPersist: safeStoredValue !== storedValue,
   };
 }
 
@@ -163,11 +190,15 @@ export function getCurrentAttribution(): PaidAttribution {
       storedValue,
     });
 
-    if (resolved.shouldPersist && resolved.storedValue) {
-      window.localStorage.setItem(
-        ATTRIBUTION_STORAGE_KEY,
-        resolved.storedValue,
-      );
+    if (resolved.shouldPersist) {
+      if (resolved.storedValue) {
+        window.localStorage.setItem(
+          ATTRIBUTION_STORAGE_KEY,
+          resolved.storedValue,
+        );
+      } else {
+        window.localStorage.removeItem(ATTRIBUTION_STORAGE_KEY);
+      }
     }
 
     return resolved.attribution;

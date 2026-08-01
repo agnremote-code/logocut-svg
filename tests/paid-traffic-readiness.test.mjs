@@ -56,10 +56,36 @@ test("direct traffic does not overwrite recent paid attribution", () => {
     now,
   });
 
-  assert.equal(direct.shouldPersist, false);
-  assert.equal(explicitDirect.shouldPersist, false);
-  assert.equal(direct.attribution.gclid, "click_123");
+  assert.equal(direct.shouldPersist, true);
+  assert.equal(explicitDirect.shouldPersist, true);
+  assert.equal(direct.attribution.gclid, undefined);
+  assert.equal(explicitDirect.attribution.gclid, undefined);
   assert.equal(explicitDirect.attribution.utm_campaign, "first_test");
+  assert.doesNotMatch(explicitDirect.storedValue, /click_123|gclid/);
+});
+
+test("raw click identifiers are transient and never persisted", () => {
+  const resolved = resolveAttribution({
+    search:
+      "?utm_source=google&utm_medium=cpc&utm_campaign=measurement_test" +
+      "&gclid=TEST_ATTRIBUTION_VALUE&gbraid=TEST_GBRAID&wbraid=TEST_WBRAID",
+    storedValue: null,
+    now: Date.UTC(2026, 7, 2),
+  });
+
+  assert.equal(resolved.attribution.gclid, "TEST_ATTRIBUTION_VALUE");
+  assert.equal(resolved.attribution.gbraid, "TEST_GBRAID");
+  assert.equal(resolved.attribution.wbraid, "TEST_WBRAID");
+  assert.deepEqual(JSON.parse(resolved.storedValue), {
+    utm_source: "google",
+    utm_medium: "cpc",
+    utm_campaign: "measurement_test",
+    captured_at: Date.UTC(2026, 7, 2),
+  });
+  assert.doesNotMatch(
+    resolved.storedValue,
+    /TEST_ATTRIBUTION_VALUE|TEST_GBRAID|TEST_WBRAID|gclid|gbraid|wbraid/,
+  );
 });
 
 test("new paid traffic replaces stale attribution and expired data is ignored", () => {

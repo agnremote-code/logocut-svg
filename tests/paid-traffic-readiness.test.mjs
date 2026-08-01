@@ -197,14 +197,17 @@ test("the requested funnel events remain wired to product surfaces", async () =>
 
 test("GA4 is documented and disabled safely until a measurement ID exists", async () => {
   const provider = await source("../components/analytics-provider.tsx");
+  const layout = await source("../app/layout.tsx");
   const envExample = await source("../.env.local.example");
 
-  assert.match(provider, /NEXT_PUBLIC_GA_MEASUREMENT_ID/);
+  assert.match(layout, /NEXT_PUBLIC_GA_MEASUREMENT_ID/);
   assert.match(provider, /getCurrentAttribution\(\)/);
-  assert.match(provider, /window\.dataLayer = window\.dataLayer \?\? \[\]/);
-  assert.match(provider, /window\.__logocutGaConfigured !== measurementId/);
-  assert.match(provider, /send_page_view: false/);
-  assert.match(provider, /allow_google_signals: false/);
-  assert.match(provider, /allow_ad_personalization_signals: false/);
+  assert.match(layout, /window\.dataLayer = window\.dataLayer \|\| \[\]/);
+  assert.match(layout, /window\.__logocutGaConfigured/);
+  assert.match(layout, /send_page_view: false/);
+  assert.match(layout, /allow_google_signals: false/);
+  assert.match(layout, /allow_ad_personalization_signals: false/);
+  assert.match(provider, /trackPageViewOnce/);
+  assert.match(provider, /markAnalyticsReady/);
   assert.match(envExample, /NEXT_PUBLIC_GA_MEASUREMENT_ID/);
 });

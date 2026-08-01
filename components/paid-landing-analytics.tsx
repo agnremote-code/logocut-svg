@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
-import { trackEvent } from "@/lib/analytics";
+import { trackEvent, trackEventOnce } from "@/lib/analytics";
 import { getCurrentAttribution } from "@/lib/attribution";
 import { createPaidLandingMetadata } from "@/lib/paid-landing-metadata";
+import { sendPaidLandingBeacon } from "@/lib/paid-landing-beacon";
+import { getSafeReferrerHost } from "@/lib/paid-traffic-receipt";
 
 export function PaidLandingAnalytics({
   sourcePage,
@@ -11,17 +13,36 @@ export function PaidLandingAnalytics({
   sourcePage: string;
 }) {
   useEffect(() => {
+    const attribution = getCurrentAttribution();
     const metadata = createPaidLandingMetadata({
-      attribution: getCurrentAttribution(),
+      attribution,
       sourcePage,
       userAgent: window.navigator.userAgent,
       viewportWidth: window.innerWidth,
     });
 
-    trackEvent("landing_page_view", {
+    trackEventOnce(`landing_page_view:${sourcePage}`, "landing_page_view", {
       source_page: sourcePage,
     });
-    trackEvent("paid_landing_view", metadata);
+    trackEventOnce(
+      `paid_landing_view:${sourcePage}`,
+      "paid_landing_view",
+      metadata,
+    );
+
+    if (metadata.has_gclid || metadata.medium.toLowerCase() === "cpc") {
+      void sendPaidLandingBeacon({
+        event_type: "paid_landing_client_beacon",
+        route: window.location.pathname,
+        source: metadata.source,
+        medium: metadata.medium,
+        campaign: metadata.campaign,
+        has_gclid: metadata.has_gclid,
+        has_utm: metadata.has_utm,
+        device_category: metadata.device_category,
+        referrer_host: getSafeReferrerHost(document.referrer),
+      }).catch(() => undefined);
+    }
 
     const pricing = document.getElementById("paid-landing-pricing");
     const uploader = document.querySelector("[data-logocut-uploader]");

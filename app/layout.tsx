@@ -14,6 +14,31 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim();
+
+const gaBootstrap = gaMeasurementId
+  ? `
+      window.dataLayer = window.dataLayer || [];
+      window.gtag = window.gtag || function(){window.dataLayer.push(arguments);};
+      if (window.__logocutGaConfigured !== ${JSON.stringify(gaMeasurementId)}) {
+        var logocutReferrer = '';
+        try {
+          var parsedReferrer = new URL(document.referrer);
+          logocutReferrer = parsedReferrer.origin + parsedReferrer.pathname;
+        } catch (error) {}
+        window.gtag('js', new Date());
+        window.gtag('config', ${JSON.stringify(gaMeasurementId)}, {
+          send_page_view: false,
+          allow_google_signals: false,
+          allow_ad_personalization_signals: false,
+          page_location: window.location.href.split('#')[0],
+          page_referrer: logocutReferrer
+        });
+        window.__logocutGaConfigured = ${JSON.stringify(gaMeasurementId)};
+      }
+    `
+  : null;
+
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.logocutsvg.com"),
   title: "LogoCut SVG | Logo to Cricut SVG Converter",
@@ -45,6 +70,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        {gaBootstrap ? (
+          <Script id="google-analytics-bootstrap" strategy="beforeInteractive">
+            {gaBootstrap}
+          </Script>
+        ) : null}
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

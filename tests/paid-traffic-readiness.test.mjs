@@ -56,10 +56,36 @@ test("direct traffic does not overwrite recent paid attribution", () => {
     now,
   });
 
-  assert.equal(direct.shouldPersist, false);
-  assert.equal(explicitDirect.shouldPersist, false);
-  assert.equal(direct.attribution.gclid, "click_123");
+  assert.equal(direct.shouldPersist, true);
+  assert.equal(explicitDirect.shouldPersist, true);
+  assert.equal(direct.attribution.gclid, undefined);
+  assert.equal(explicitDirect.attribution.gclid, undefined);
   assert.equal(explicitDirect.attribution.utm_campaign, "first_test");
+  assert.doesNotMatch(explicitDirect.storedValue, /click_123|gclid/);
+});
+
+test("raw click identifiers are transient and never persisted", () => {
+  const resolved = resolveAttribution({
+    search:
+      "?utm_source=google&utm_medium=cpc&utm_campaign=measurement_test" +
+      "&gclid=TEST_ATTRIBUTION_VALUE&gbraid=TEST_GBRAID&wbraid=TEST_WBRAID",
+    storedValue: null,
+    now: Date.UTC(2026, 7, 2),
+  });
+
+  assert.equal(resolved.attribution.gclid, "TEST_ATTRIBUTION_VALUE");
+  assert.equal(resolved.attribution.gbraid, "TEST_GBRAID");
+  assert.equal(resolved.attribution.wbraid, "TEST_WBRAID");
+  assert.deepEqual(JSON.parse(resolved.storedValue), {
+    utm_source: "google",
+    utm_medium: "cpc",
+    utm_campaign: "measurement_test",
+    captured_at: Date.UTC(2026, 7, 2),
+  });
+  assert.doesNotMatch(
+    resolved.storedValue,
+    /TEST_ATTRIBUTION_VALUE|TEST_GBRAID|TEST_WBRAID|gclid|gbraid|wbraid/,
+  );
 });
 
 test("new paid traffic replaces stale attribution and expired data is ignored", () => {
@@ -197,14 +223,17 @@ test("the requested funnel events remain wired to product surfaces", async () =>
 
 test("GA4 is documented and disabled safely until a measurement ID exists", async () => {
   const provider = await source("../components/analytics-provider.tsx");
+  const layout = await source("../app/layout.tsx");
   const envExample = await source("../.env.local.example");
 
-  assert.match(provider, /NEXT_PUBLIC_GA_MEASUREMENT_ID/);
+  assert.match(layout, /NEXT_PUBLIC_GA_MEASUREMENT_ID/);
   assert.match(provider, /getCurrentAttribution\(\)/);
-  assert.match(provider, /window\.dataLayer = window\.dataLayer \?\? \[\]/);
-  assert.match(provider, /window\.__logocutGaConfigured !== measurementId/);
-  assert.match(provider, /send_page_view: false/);
-  assert.match(provider, /allow_google_signals: false/);
-  assert.match(provider, /allow_ad_personalization_signals: false/);
+  assert.match(layout, /window\.dataLayer = window\.dataLayer \|\| \[\]/);
+  assert.match(layout, /window\.__logocutGaConfigured/);
+  assert.match(layout, /send_page_view: false/);
+  assert.match(layout, /allow_google_signals: false/);
+  assert.match(layout, /allow_ad_personalization_signals: false/);
+  assert.match(provider, /trackPageViewOnce/);
+  assert.match(provider, /markAnalyticsReady/);
   assert.match(envExample, /NEXT_PUBLIC_GA_MEASUREMENT_ID/);
 });

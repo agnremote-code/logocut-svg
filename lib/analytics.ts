@@ -1,14 +1,20 @@
 "use client";
 
 import { CutType, OneTimeProductType } from "@/lib/job-types";
-import { getCurrentAttribution, PaidAttribution } from "@/lib/attribution";
+import { getCurrentAttribution } from "@/lib/attribution";
 import {
   createPurchaseAnalyticsParams,
-  sanitizeAnalyticsParams,
+  sanitizeAnalyticsEventParams,
 } from "@/lib/analytics-payload";
+import { flushQueuedAnalyticsEvents } from "@/lib/analytics-queue";
+import {
+  getGaCampaignFields,
+  getGaPageLocation,
+} from "@/lib/ga-attribution";
 import { recordFunnelDiagnostic } from "@/lib/funnel-diagnostics";
 
 type AnalyticsEventName =
+  | "page_view"
   | "homepage_view"
   | "landing_page_view"
   | "paid_landing_view"
@@ -78,8 +84,18 @@ type AnalyticsParams = {
   direction?: string;
   consent_source?: string;
   failure_reason?: string;
+  page_location?: string;
+  page_path?: string;
+  page_title?: string;
+  page_referrer?: string;
+  debug_mode?: boolean;
+  campaign_source?: string;
+  campaign_medium?: string;
+  campaign_name?: string;
+  campaign_content?: string;
+  campaign_term?: string;
   items?: AnalyticsItem[];
-} & PaidAttribution;
+};
 
 type AnalyticsItem = {
   item_id: string;
@@ -95,14 +111,83 @@ declare global {
     dataLayer?: unknown[][];
     gtag?: (...args: unknown[]) => void;
     __logocutGaConfigured?: string;
+    __logocutGaReady?: boolean;
+    __logocutPageViews?: Set<string>;
+    __logocutEventDedupe?: Set<string>;
     __logocutAnalyticsQueue?: Array<{
       eventName: AnalyticsEventName;
       params: Record<string, unknown>;
     }>;
+    __logocutAnalyticsDiagnostics?: AnalyticsDiagnostics;
   }
 }
 
 const purchaseMemory = new Set<string>();
+
+export type AnalyticsDiagnostics = {
+  measurementIdPresent: boolean;
+  scriptLoaded: boolean;
+  configIssued: boolean;
+  queueLength: number;
+  pageViewSent: boolean;
+  lastDispatchStatus: "idle" | "queued" | "sent" | "blocked";
+};
+
+function updateDiagnostics(update: Partial<AnalyticsDiagnostics>) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.__logocutAnalyticsDiagnostics = {
+    measurementIdPresent: Boolean(
+      process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim(),
+    ),
+    scriptLoaded: Boolean(window.__logocutGaReady),
+    configIssued: Boolean(window.__logocutGaConfigured),
+    queueLength: window.__logocutAnalyticsQueue?.length ?? 0,
+    pageViewSent: Boolean(window.__logocutPageViews?.size),
+    lastDispatchStatus: "idle",
+    ...window.__logocutAnalyticsDiagnostics,
+    ...update,
+  };
+}
+
+function getSafeAttributionParams() {
+  const attribution = getCurrentAttribution();
+  const pagePath = window.location.pathname;
+
+  return {
+    ...getGaCampaignFields(attribution),
+    has_gclid: Boolean(
+      attribution.gclid || attribution.gbraid || attribution.wbraid,
+    ),
+    has_utm: Boolean(
+      attribution.utm_source ||
+        attribution.utm_medium ||
+        attribution.utm_campaign ||
+        attribution.utm_content ||
+        attribution.utm_term,
+    ),
+    page_path: pagePath,
+  };
+}
+
+function dispatchToGa(
+  eventName: AnalyticsEventName,
+  params: Record<string, unknown>,
+) {
+  if (
+    typeof window === "undefined" ||
+    !window.__logocutGaReady ||
+    typeof window.gtag !== "function"
+  ) {
+    return false;
+  }
+
+  window.gtag("event", eventName, params);
+  updateDiagnostics({ lastDispatchStatus: "sent" });
+  return true;
+}
 
 export function trackEvent(
   eventName: AnalyticsEventName,
@@ -112,19 +197,21 @@ export function trackEvent(
     return false;
   }
 
-  const cleanParams = sanitizeAnalyticsParams({
-    ...getCurrentAttribution(),
+  const cleanParams = sanitizeAnalyticsEventParams(eventName, {
+    ...getSafeAttributionParams(),
     ...params,
   });
 
-  recordFunnelDiagnostic(eventName, cleanParams);
+  const diagnosticParams = { ...cleanParams };
+  delete diagnosticParams.page_location;
+  recordFunnelDiagnostic(eventName, diagnosticParams);
 
   if (!process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim()) {
+    updateDiagnostics({ lastDispatchStatus: "blocked" });
     return false;
   }
 
-  if (typeof window.gtag === "function") {
-    window.gtag("event", eventName, cleanParams);
+  if (dispatchToGa(eventName, cleanParams)) {
     return true;
   }
 
@@ -132,6 +219,10 @@ export function trackEvent(
 
   if (window.__logocutAnalyticsQueue.length < 50) {
     window.__logocutAnalyticsQueue.push({ eventName, params: cleanParams });
+    updateDiagnostics({
+      lastDispatchStatus: "queued",
+      queueLength: window.__logocutAnalyticsQueue.length,
+    });
     return true;
   }
 
@@ -139,16 +230,108 @@ export function trackEvent(
 }
 
 export function flushAnalyticsQueue() {
-  if (typeof window === "undefined" || typeof window.gtag !== "function") {
-    return;
+  if (
+    typeof window === "undefined" ||
+    !window.__logocutGaReady ||
+    typeof window.gtag !== "function"
+  ) {
+    return 0;
   }
 
   const queue = window.__logocutAnalyticsQueue ?? [];
-  window.__logocutAnalyticsQueue = [];
+  const flushedCount = flushQueuedAnalyticsEvents(queue, (event) => {
+    dispatchToGa(event.eventName as AnalyticsEventName, event.params);
+  });
 
-  for (const event of queue) {
-    window.gtag("event", event.eventName, event.params);
+  updateDiagnostics({ queueLength: 0 });
+  return flushedCount;
+}
+
+export function markAnalyticsReady() {
+  if (typeof window === "undefined") {
+    return 0;
   }
+
+  window.__logocutGaReady = true;
+  updateDiagnostics({ scriptLoaded: true });
+  return flushAnalyticsQueue();
+}
+
+export function trackEventOnce(
+  dedupeKey: string,
+  eventName: AnalyticsEventName,
+  params: AnalyticsParams = {},
+) {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  window.__logocutEventDedupe = window.__logocutEventDedupe ?? new Set();
+
+  if (window.__logocutEventDedupe.has(dedupeKey)) {
+    return false;
+  }
+
+  const accepted = trackEvent(eventName, params);
+
+  if (accepted) {
+    window.__logocutEventDedupe.add(dedupeKey);
+  }
+
+  return accepted;
+}
+
+function stripSearchAndHash(value: string) {
+  try {
+    const url = new URL(value);
+    return `${url.origin}${url.pathname}`;
+  } catch {
+    return "";
+  }
+}
+
+export function trackPageViewOnce(params: { debug_mode?: boolean } = {}) {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const pagePath = window.location.pathname;
+  window.__logocutPageViews = window.__logocutPageViews ?? new Set();
+
+  if (window.__logocutPageViews.has(pagePath)) {
+    return false;
+  }
+
+  const accepted = trackEvent("page_view", {
+    page_location: getGaPageLocation(window.location.href),
+    page_path: pagePath,
+    page_title: document.title.slice(0, 200),
+    page_referrer: stripSearchAndHash(document.referrer),
+    ...params,
+  });
+
+  if (accepted) {
+    window.__logocutPageViews.add(pagePath);
+    updateDiagnostics({ pageViewSent: true });
+  }
+
+  return accepted;
+}
+
+export function getAnalyticsDiagnostics(): AnalyticsDiagnostics {
+  if (typeof window === "undefined") {
+    return {
+      measurementIdPresent: false,
+      scriptLoaded: false,
+      configIssued: false,
+      queueLength: 0,
+      pageViewSent: false,
+      lastDispatchStatus: "idle",
+    };
+  }
+
+  updateDiagnostics({});
+  return window.__logocutAnalyticsDiagnostics as AnalyticsDiagnostics;
 }
 
 export function trackPurchaseOnce(params: {

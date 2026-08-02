@@ -11,10 +11,10 @@ import { normalizeLanguageId } from "@/lib/lesson/language";
 import { demoPresets } from "@/lib/presets";
 import { createBrowserDraftStore, LATEST_DRAFT_KEY } from "@/lib/storage/drafts";
 import { associateLessonWithProfile, createProfileStore, deleteAllLocalTeachingData } from "@/lib/storage/profiles";
-import { defaultLessonRequest, type LessonDraft, type LessonRequest, type StudentProfile } from "@/types/lesson";
+import { emptyLessonRequest, type LessonDraft, type LessonRequest, type StudentProfile } from "@/types/lesson";
 
 export function LessonApp() {
-  const [request, setRequest] = useState<LessonRequest>(defaultLessonRequest);
+  const [request, setRequest] = useState<LessonRequest>(emptyLessonRequest);
   const [lesson, setLesson] = useState<LessonDraft | null>(null);
   const [recent, setRecent] = useState<LessonDraft[]>([]);
   const [loading, setLoading] = useState(false);
@@ -103,7 +103,7 @@ export function LessonApp() {
   function startNew() {
     if (lesson && !window.confirm("Start a new lesson? Your current draft is saved in this browser.")) return;
     setLesson(null);
-    setRequest(defaultLessonRequest);
+    setRequest(emptyLessonRequest);
     setError("");
     viewed.current = false;
     window.requestAnimationFrame(scrollToBuilder);
@@ -165,7 +165,7 @@ export function LessonApp() {
     setProfiles([]);
     setRecent([]);
     setLesson(null);
-    setRequest(defaultLessonRequest);
+    setRequest(emptyLessonRequest);
   };
 
   return (
@@ -180,7 +180,7 @@ export function LessonApp() {
         <div className="hero-copy">
           <span className="hero-kicker">MADE FOR TUTORS AND TEACHERS</span>
           <h1>Describe the class. Open it. Teach it.</h1>
-          <p>Interactive lesson software for online tutors and language teachers. Turn any topic, text or video into a presentable class, student workbook and teacher pack.</p>
+          <p>Turn an idea, teaching material or YouTube video into a professionally designed, immediately teachable class.</p>
           <div className="hero-actions">
             <button className="primary-button" type="button" onClick={scrollToBuilder}>Create My Next Class</button>
             <button className="text-button" type="button" onClick={() => selectPreset("a0-buenos-aires", true)}>Open a Demo <span>→</span></button>
@@ -190,24 +190,13 @@ export function LessonApp() {
         <div className="hero-visual" aria-label="Example lesson flow">
           <div className="visual-window">
             <div className="visual-top"><span>LESSON 04</span><b>B1 · 60 MIN</b></div>
-            <div className="visual-card card-one"><small>VISUAL GRAMMAR</small><h3>SER vs ESTAR</h3></div>
+            <div className="visual-card card-one"><small>VISUAL GRAMMAR</small><h3>SER y ESTAR</h3></div>
             <div className="visual-card card-two"><small>MEANING MAP</small><div><b>identity</b><b>location</b><b>state</b></div></div>
-            <div className="visual-strip"><span className="active">01</span><span>02</span><span>03</span><span>04</span><span>18</span></div>
+            <div className="visual-strip"><span className="active">01</span><span>02</span><span>03</span><span>04</span><span>13</span></div>
           </div>
           <div className="floating-note"><b>Ready to present</b><span>Simple navigation. Teacher tools stay closed until you need them.</span></div>
         </div>
       </section>
-
-      <PlatformCompatibility />
-
-      <StudentProfiles
-        profiles={profiles}
-        selectedId={request.profileId}
-        onSelect={selectProfile}
-        onSave={saveProfile}
-        onDuplicate={(id) => { const store = createProfileStore(window.localStorage); store.duplicate(id); setProfiles(store.list()); }}
-        onDelete={deleteProfile}
-      />
 
       <LessonBuilder
         request={request}
@@ -222,6 +211,17 @@ export function LessonApp() {
       />
 
       {lesson && <LessonWorkspace lesson={lesson} onChange={setLesson} onNew={startNew} onSaveToProfile={selectedProfile ? () => saveProfile(associateLessonWithProfile(selectedProfile, lesson)) : undefined} />}
+
+      <PlatformCompatibility />
+
+      <StudentProfiles
+        profiles={profiles}
+        selectedId={request.profileId}
+        onSelect={selectProfile}
+        onSave={saveProfile}
+        onDuplicate={(id) => { const store = createProfileStore(window.localStorage); store.duplicate(id); setProfiles(store.list()); }}
+        onDelete={deleteProfile}
+      />
 
       {recent.length > 0 && (
         <section className="draft-library">

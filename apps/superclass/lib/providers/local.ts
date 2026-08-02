@@ -8,6 +8,8 @@ import { buildSpanishTopicScreens } from "@/lib/lesson/spanish-generic";
 import { buildBeginnerScreens } from "@/lib/lesson/beginner-engine";
 import { buildAdvancedScreens } from "@/lib/lesson/advanced-engine";
 import { selectLessonArchetype } from "@/lib/lesson/archetypes";
+import { createCreativeLessonBrief } from "@/lib/lesson/creative-brief";
+import { interpretLessonRequest, type InterpretedLessonIntent } from "@/lib/lesson/intent";
 import { extractYouTubeId } from "@/lib/validation/lesson";
 import type { LessonDraft, LessonRequest, LessonScreen, ScreenLayout, ScreenType, VocabularyItem } from "@/types/lesson";
 
@@ -154,29 +156,31 @@ function profileSummary(request: LessonRequest) {
   return details.join(" · ");
 }
 
-function lessonTitle(request: LessonRequest, topic: string, specializedTemplate?: string) {
+function lessonTitle(request: LessonRequest, topic: string, intent: InterpretedLessonIntent, specializedTemplate?: string) {
   const material = `${topic} ${request.source}`.toLocaleLowerCase();
-  if (specializedTemplate === "ser-estar") return "SER vs ESTAR";
+  if (specializedTemplate === "ser-estar") return "SER y ESTAR";
   if (/buenos aires/.test(material)) return "Buenos Aires en Español";
   if (/routine|rutina diaria/.test(material)) return "Mi rutina diaria";
   if (/las vegas|casino|gambl/.test(material)) return "Las Vegas: Risk by Design";
   if (/ethical|ética|dilemma/.test(material)) return "Where Should We Draw the Line?";
-  return topic.charAt(0).toUpperCase() + topic.slice(1);
+  return intent.title;
 }
 
-function buildScreens(request: LessonRequest, topic: string) {
-  const plan = createLessonPlan(request);
-  const archetype = selectLessonArchetype(request);
+function buildScreens(request: LessonRequest, topic: string, intent: InterpretedLessonIntent) {
+  const creativeBrief = createCreativeLessonBrief(request, intent);
+  const plan = createLessonPlan(request, intent, creativeBrief);
+  const archetype = selectLessonArchetype(request, intent);
   if (plan.specializedTemplate === "ser-estar" && request.language === "es") return buildSerEstarScreens(request);
   if (archetype.engine === "beginner") return buildBeginnerScreens(request, topic);
   if (plan.specializedTemplate && request.language === "es" && request.sourceMode === "idea") return buildSpanishGrammarScreens(request, plan);
   if (archetype.engine === "advanced" && request.sourceMode === "idea" && request.language !== "es") return buildAdvancedScreens(request, topic, archetype.id);
-  if (request.language === "es") return buildSpanishTopicScreens(request, topic, extractYouTubeId(request.videoUrl) ?? undefined);
+  if (request.language === "es") return buildSpanishTopicScreens(request, topic, extractYouTubeId(request.videoUrl) ?? undefined, intent.sourceKind);
   const guidance = levelGuidance[request.level];
   const key = contextKey(request, topic);
   const vocab = vocabulary(topic, key, request.recentVocabulary);
   const sourceText = request.sourceMode === "video" ? request.transcript : request.source;
-  const sourceExcerpt = request.sourceMode === "idea" ? undefined : sourceText.slice(0, 320);
+  const sourceGrounded = intent.sourceKind === "video" || intent.sourceKind === "source-material";
+  const sourceExcerpt = sourceGrounded ? sourceText.slice(0, 320) : undefined;
   const screens: LessonScreen[] = [];
   const add = (type: ScreenType, title: string, instruction: string, options?: Parameters<typeof screen>[4]) => {
     screens.push(screen(screens.length, type, title, instruction, options));
@@ -215,7 +219,7 @@ function buildScreens(request: LessonRequest, topic: string) {
       teacherNotes: ["Questions use only the imported or teacher-edited transcript supplied with this request."],
       timing: 6,
     });
-  } else if (request.sourceMode === "text") {
+  } else if (intent.sourceKind === "source-material") {
     add("source", "Read for meaning", "Read once without stopping. Then mark the sentence that matters most.", {
       sourceExcerpt,
       prompts: ["What is the central idea?", "Which detail best supports it?", "What remains unclear?"],
@@ -225,7 +229,7 @@ function buildScreens(request: LessonRequest, topic: string) {
     });
   }
 
-  if (request.sourceMode !== "idea" || request.lessonFocus === "source-comprehension") {
+  if (sourceGrounded || request.lessonFocus === "source-comprehension") {
     add("comprehension", "Check the source, not your memory", "Answer with evidence from the source.", {
       prompts: ["What happened or was argued first?", "Which detail changes the meaning?", "What can we infer without inventing information?"],
       answers: sourceExcerpt ? [`Evidence must come from: “${clean(sourceExcerpt, 140)}…”`] : ["Use only the source supplied by the teacher."],
@@ -341,7 +345,7 @@ function buildScreens(request: LessonRequest, topic: string) {
     });
   }
 
-  const target = targetScreenCount(request.duration);
+  const target = targetScreenCount(request.duration, request.level);
   const protectedTypes: ScreenType[] = ["cover", "objective", "warmup", "vocabulary", "discussion", "debate", "review", "exit-task"];
   while (screens.length > target - 1) {
     const removable = screens.findIndex((item, index) => index > 2 && !protectedTypes.includes(item.type));
@@ -349,8 +353,10 @@ function buildScreens(request: LessonRequest, topic: string) {
     screens.splice(removable, 1);
   }
   let practiceNumber = 1;
+  const practiceLayouts: ScreenLayout[] = ["multiple-choice", "sentence-builder", "dialogue"];
   while (screens.length < target - 1) {
     add("controlled-practice", `Practice round ${practiceNumber}`, request.practiceDensity === "repetition-heavy" ? "Repeat the pattern with one new detail." : "Apply the language in a fresh situation.", {
+      layout: practiceLayouts[(practiceNumber - 1) % practiceLayouts.length],
       prompts: [
         `${guidance.promptLead}: connect ${topic} to scenario ${practiceNumber}.`,
         `In round ${practiceNumber}, use target expression ${((practiceNumber - 1) % vocab.length) + 1} in a complete response.`,
@@ -378,9 +384,11 @@ function buildScreens(request: LessonRequest, topic: string) {
 export const deterministicProvider: LessonProvider<LessonDraft> = {
   name: "deterministic-local",
   async generate(request, context) {
-    const topic = topicFrom(request);
-    const plan = createLessonPlan(request);
-    const archetype = selectLessonArchetype(request);
+    const intent = context.intent ?? interpretLessonRequest(request);
+    const topic = intent.topic || topicFrom(request);
+    const creativeBrief = context.creativeBrief ?? createCreativeLessonBrief(request, intent);
+    const plan = createLessonPlan(request, intent, creativeBrief);
+    const archetype = selectLessonArchetype(request, intent);
     const guidance = levelGuidance[request.level];
     const dialect = request.dialect === "custom" ? request.customDialect || "Custom" : request.dialect;
     return {
@@ -388,7 +396,7 @@ export const deterministicProvider: LessonProvider<LessonDraft> = {
       id: `lesson-${context.contentHash}`,
       requestId: context.requestId,
       contentHash: context.contentHash,
-      title: lessonTitle(request, topic, plan.specializedTemplate),
+      title: lessonTitle(request, topic, intent, plan.specializedTemplate),
       dialect,
       level: request.level,
       duration: request.duration,
@@ -405,7 +413,7 @@ export const deterministicProvider: LessonProvider<LessonDraft> = {
         request.learningGoal ? `Personal goal: ${clean(request.learningGoal, 130)}.` : "Finish with a clear, independent response.",
       ],
       language: languageLabel(request.language, request.customLanguage),
-      screens: buildScreens(request, topic),
+      screens: buildScreens(request, topic, intent),
       sourceMode: request.sourceMode,
       createdAt: new Date(0).toISOString(),
       suggestedNextLesson: `Build on today’s corrections with a new real-life situation connected to ${topic}.`,

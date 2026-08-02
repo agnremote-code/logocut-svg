@@ -1,5 +1,6 @@
 import { normalizeActivityTiming, targetScreenCount } from "@/lib/lesson/duration";
 import { effectiveLanguageMode } from "@/lib/lesson/language";
+import type { InterpretedSourceKind } from "@/lib/lesson/intent";
 import type { LessonRequest, LessonScreen, ScreenLayout, ScreenType } from "@/types/lesson";
 
 function item(index: number, type: ScreenType, layout: ScreenLayout, title: string, instruction: string, options: Partial<LessonScreen> = {}): LessonScreen {
@@ -17,12 +18,13 @@ function item(index: number, type: ScreenType, layout: ScreenLayout, title: stri
   };
 }
 
-export function buildSpanishTopicScreens(request: LessonRequest, topic: string, videoId?: string) {
+export function buildSpanishTopicScreens(request: LessonRequest, topic: string, videoId?: string, sourceKind: InterpretedSourceKind = request.sourceMode === "video" ? "video" : "idea") {
   const result: LessonScreen[] = [];
   const add = (type: ScreenType, layout: ScreenLayout, title: string, instruction: string, options?: Partial<LessonScreen>) =>
     result.push(item(result.length, type, layout, title, instruction, options));
   const source = request.sourceMode === "video" ? request.transcript : request.source;
-  const excerpt = request.sourceMode === "idea" ? undefined : source.slice(0, 320);
+  const sourceGrounded = sourceKind === "video" || sourceKind === "source-material";
+  const excerpt = sourceGrounded ? source.slice(0, 320) : undefined;
   const bilingual = ["bilingual", "support-heavy"].includes(effectiveLanguageMode(request));
   const vocabularyPool = [
     { term: "una idea clave", meaning: bilingual ? "a key idea" : "el concepto principal", example: `Una idea clave sobre ${topic} es…` },
@@ -39,8 +41,8 @@ export function buildSpanishTopicScreens(request: LessonRequest, topic: string, 
 
   add("cover", "cover", topic, "Una clase diseñada para hablar, comprender y usar el español con precisión.", { body: `${request.level} · ${request.duration} minutos`, timing: 2, teacherNotes: ["Present the exact topic and one concrete outcome."] });
   add("objective", "objective", "Objetivos de la clase", "Lee las metas y elige la más importante para ti.", { prompts: [`Puedo hablar sobre ${topic}.`, "Puedo usar el vocabulario clave en frases completas.", "Puedo responder con una razón y un ejemplo."], answers: ["Success means relevant, level-appropriate Spanish production."], teacherNotes: ["Keep support concise and let the learner state a personal goal."], timing: 3 });
-  if (request.sourceMode !== "idea") {
-    add(request.sourceMode === "video" ? "video" : "source", "illustrated-context", request.sourceMode === "video" ? "Mira con un propósito" : "Lee con un propósito", "Busca la idea principal y dos detalles importantes.", { sourceExcerpt: excerpt, videoId, prompts: ["¿Cuál es la idea principal?", "¿Qué detalle la apoya?"], answers: ["Answers must be supported by the displayed excerpt."], teacherNotes: ["Use only the imported or teacher-edited transcript."], timing: 6 });
+  if (sourceGrounded) {
+    add(sourceKind === "video" ? "video" : "source", "illustrated-context", sourceKind === "video" ? "Mira con un propósito" : "Lee con un propósito", "Busca la idea principal y dos detalles importantes.", { sourceExcerpt: excerpt, videoId, prompts: ["¿Cuál es la idea principal?", "¿Qué detalle la apoya?"], answers: ["Answers must be supported by the displayed excerpt."], teacherNotes: ["Use only the imported or teacher-edited transcript."], timing: 6 });
     add("comprehension", "multiple-choice", "Comprueba la comprensión", "Responde con evidencia exacta de la fuente.", { sourceExcerpt: excerpt, prompts: ["¿Qué afirma primero la fuente?", "¿Qué ejemplo aparece?", "¿Qué podemos inferir sin inventar información?"], answers: excerpt ? [`Evidencia obligatoria: ${excerpt.slice(0, 150)}`] : ["Use the source."], teacherNotes: ["Separate comprehension from opinion."], timing: 5 });
   }
   add("warmup", "illustrated-context", "Activa el tema", "Observa las situaciones y conecta una con tu experiencia.", { body: `Tres perspectivas sobre ${topic}: experiencia · necesidad · opinión`, prompts: [`¿Qué experiencia real tienes con ${topic}?`, "¿Qué palabra ya conoces?", "¿Qué quieres poder decir al final?"], teacherNotes: ["Adapt the concrete follow-up to the exact topic."], timing: 5 });
@@ -64,7 +66,7 @@ export function buildSpanishTopicScreens(request: LessonRequest, topic: string, 
   add("exit-task", "recap", "Reto final", "Habla durante un minuto sin leer.", { prompts: [`Presenta una idea clara sobre ${topic}.`, "Incluye una razón.", "Usa dos expresiones clave.", "Termina con un ejemplo."], answers: ["Complete idea · reason · two target expressions · example"], teacherNotes: ["Record one success and one next step."], timing: 4 });
   if (request.includeHomework) add("homework", "homework", "Tarea útil", "Crea una respuesta que puedas usar fuera de clase.", { prompts: [`Escribe o graba una respuesta sobre ${topic}.`, "Usa cuatro expresiones de la clase.", "Mejora una frase después de revisarla."], answers: ["Check completion, relevance and one self-correction."], teacherNotes: ["Keep homework independent of paid platforms."], timing: 2 });
 
-  const target = targetScreenCount(request.duration) - 1;
+  const target = targetScreenCount(request.duration, request.level) - 1;
   let round = 1;
   while (result.length < target) {
     add("controlled-practice", round % 2 ? "fill-gap" : "example-gallery", `Práctica específica ${round}`, `Aplica el español directamente al tema: ${topic}.`, { prompts: [`Completa la idea ${round} sobre ${topic}.`, `Añade un ejemplo específico ${round}.`], answers: ["Check accurate, topic-specific Spanish."], teacherNotes: ["Keep this round connected to the exact requested topic."], timing: 4 });

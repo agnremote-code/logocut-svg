@@ -29,102 +29,128 @@ function make(
 
 export function buildSerEstarScreens(request: LessonRequest) {
   const bilingual = ["bilingual", "support-heavy"].includes(effectiveLanguageMode(request));
-  const support = (spanish: string, english: string) => bilingual ? `${spanish} · ${english}` : spanish;
+  const support = (spanish: string, english: string) => bilingual ? `${spanish} || ${english}` : spanish;
+  const beginner = request.level === "A0" || request.level === "A1";
   const screens: LessonScreen[] = [];
   const add = (type: ScreenType, layout: ScreenLayout, title: string, instruction: string, options?: Parameters<typeof make>[5]) =>
     screens.push(make(screens.length, type, layout, title, instruction, options));
 
-  add("cover", "cover", "SER vs ESTAR", support("Dos verbos, trabajos diferentes", "Two verbs, different jobs"), {
-    body: "Identidad · origen · profesión · características  /  ubicación · estado · emoción · condición",
-    teacherNotes: ["Keep Spanish visually dominant. Use English only to confirm the concept."],
+  add("cover", "cover", "SER y ESTAR", support("Dos verbos. Dos trabajos. Una elección clara.", "Two verbs. Two jobs. One clear choice."), {
+    body: support("QUIÉN ES · DE DÓNDE ES  /  DÓNDE ESTÁ · CÓMO ESTÁ", "WHO SOMEONE IS · WHERE THEY ARE FROM  /  WHERE THEY ARE · HOW THEY FEEL"),
+    teacherNotes: ["Open on the designed meaning-map cover. Do not preview lesson modules."],
     timing: 2,
   });
-  add("objective", "objective", "Meta de hoy", support("Al final puedes elegir ser o estar en situaciones comunes.", "By the end, you can choose ser or estar in common situations."), {
-    prompts: ["Puedo explicar quién es una persona.", "Puedo decir dónde está y cómo está."],
-    answers: ["The learner chooses the verb and explains the meaning contrast."],
-    teacherNotes: ["Ask the learner to read the two Spanish outcomes aloud."],
+  add("objective", "objective", "Meta de hoy", support("Vas a elegir el verbo por su significado.", "You will choose the verb from its meaning."), {
+    prompts: [support("SER: identidad y origen", "SER: identity and origin"), support("ESTAR: lugar y estado", "ESTAR: location and state")],
+    answers: ["The learner identifies the meaning before choosing the verb."],
+    teacherNotes: ["Keep the objective visible for under one minute."],
     timing: 3,
   });
-  add("microgrammar", "comparison", "Dos verbos, dos funciones", support("Compara las categorías. No memorices una regla de «permanente vs temporal».", "Compare the jobs; avoid an oversimplified permanent/temporary rule."), {
-    body: "SER → Quién o qué algo es. ESTAR → Dónde está algo o cómo está ahora.",
-    prompts: ["SER: ¿quién o qué es?", "ESTAR: ¿dónde o cómo está?"],
-    answers: ["SER: Who or what something is. ESTAR: Where something is or how it is now."],
-    teacherNotes: ["Use the stable blue SER accent and warm yellow ESTAR accent."],
+  add("microgrammar", "comparison", "Dos verbos, dos funciones", support("Mirá el mapa. Después, decí una diferencia.", "Look at the map. Then say one difference."), {
+    body: "SER → identidad, origen, profesión. ESTAR → ubicación, emoción, condición.",
+    prompts: [support("SER responde: ¿quién es?", "SER answers: who is it?"), support("ESTAR responde: ¿dónde o cómo está?", "ESTAR answers: where or how is it?")],
+    answers: ["SER: identity/origin/profession. ESTAR: location/emotion/condition."],
+    teacherNotes: ["Avoid the inaccurate permanent-versus-temporary shortcut."],
     timing: 5,
   });
-  add("microgrammar", "rule-cards", "Los trabajos de SER", support("Observa los cuatro usos centrales.", "Notice the four core uses."), {
-    prompts: ["Identidad: Soy Elena.", "Origen: Somos de México.", "Profesión: Él es médico.", "Característica: La casa es luminosa."],
-    answers: ["Identity, origin, profession and general characteristic use SER."],
-    teacherNotes: ["Contrast profession without an article: Es médico."],
+  add("microgrammar", "example-gallery", "Personas y lugares con SER", support("Conectá cada persona o lugar con identidad u origen.", "Connect each person or place with identity or origin."), {
+    prompts: [
+      support("Ana es médica.", "Ana is a doctor."),
+      support("Mateo es de Chile.", "Mateo is from Chile."),
+      support("Buenos Aires es una ciudad grande.", "Buenos Aires is a large city."),
+      support("Ellos son estudiantes.", "They are students."),
+    ],
+    answers: ["profesión", "origen", "identidad", "identidad"],
+    teacherNotes: ["Use the people-and-place composition to make meaning visible."],
     timing: 5,
   });
-  add("microgrammar", "rule-cards", "Los trabajos de ESTAR", support("Relaciona cada ejemplo con ubicación, emoción o condición.", "Match each example to location, emotion or condition."), {
-    prompts: ["Ubicación: El libro está aquí.", "Emoción: Estoy contenta.", "Condición: La puerta está abierta.", "Estado: Estamos cansados."],
-    answers: ["Location, emotion, current condition and state use ESTAR."],
-    teacherNotes: ["Point out that location normally uses ESTAR, even when it is not temporary."],
+  add("microgrammar", "illustrated-context", "Personas y lugares con ESTAR", support("Relacioná cada escena con lugar, emoción o condición.", "Match each scene with location, emotion or condition."), {
+    body: "📍 plaza · 🙂 tranquila · 🚪 abierta · 🏠 en casa",
+    prompts: [
+      support("Ana está en la plaza.", "Ana is in the square."),
+      support("Mateo está contento.", "Mateo is happy."),
+      support("La puerta está abierta.", "The door is open."),
+      support("Ellos están en casa.", "They are at home."),
+    ],
+    answers: ["ubicación", "emoción", "condición", "ubicación"],
+    teacherNotes: ["Treat the designed SVG scene as a meaning cue, not decoration."],
     timing: 5,
   });
-  add("controlled-practice", "multiple-choice", "Elige el verbo", support("Decide y explica qué pregunta responde: quién, de dónde, dónde o cómo.", "Choose and explain the meaning."), {
-    prompts: ["Mi hermana ___ arquitecta.", "Nosotros ___ en la oficina.", "Yo ___ nervioso hoy.", "Ellas ___ de Colombia."],
-    answers: ["es", "estamos", "estoy", "son"],
-    teacherNotes: ["Reveal answers only after the learner commits."],
+  add("controlled-practice", "multiple-choice", "¿SER o ESTAR?", support("Elegí el verbo. Después, nombrá el significado.", "Choose the verb. Then name the meaning."), {
+    prompts: ["Mi hermana ___ profesora.", "Nosotros ___ en clase.", "Yo ___ de México.", "La ventana ___ abierta."],
+    answers: ["es — profesión", "estamos — ubicación", "soy — origen", "está — condición"],
+    teacherNotes: ["Reveal only after the learner commits to all four."],
     timing: 5,
   });
-  add("controlled-practice", "sorting", "Clasifica: SER o ESTAR", support("Selecciona una categoría para cada situación.", "Sort each situation into a category."), {
-    prompts: ["Mi profesión", "La ubicación del café", "Mi emoción hoy", "El país de origen"],
-    answers: ["SER", "ESTAR", "ESTAR", "SER"],
-    teacherNotes: ["Ask for a full example after each choice."],
+  add("controlled-practice", "sorting", "Uní ejemplo y significado", support("Llevá cada ejemplo a la categoría correcta.", "Match each example to the correct meaning."), {
+    prompts: ["Soy estudiante.", "Estoy en Seúl.", "Somos de Argentina.", "Está cansada."],
+    answers: ["identidad", "ubicación", "origen", "estado"],
+    teacherNotes: ["Ask for one new example after sorting."],
     timing: 5,
   });
-  add("controlled-practice", "fill-gap", "Completa la frase", support("Conjuga ser o estar en presente.", "Complete with the present-tense form."), {
-    prompts: ["La reunión ___ en la sala dos.", "Mis amigos ___ muy creativos.", "¿Cómo ___ tú hoy?", "Yo ___ profesora de español."],
-    answers: ["está", "son", "estás", "soy"],
-    teacherNotes: ["Check both verb selection and subject agreement."],
+  add("controlled-practice", "fill-gap", "Completá frases cortas", support("Escribí la forma correcta de ser o estar.", "Write the correct form of ser or estar."), {
+    prompts: ["Yo ___ de Corea.", "Mi amiga ___ en Madrid.", "Nosotros ___ estudiantes.", "¿Cómo ___ vos hoy?"],
+    answers: ["soy", "está", "somos", "estás"],
+    teacherNotes: ["Check meaning first, then subject agreement."],
     timing: 5,
   });
-  add("error-correction", "error-correction", "Detective de errores", support("Corrige y explica el cambio.", "Correct each sentence and explain why."), {
-    prompts: ["Soy cansado después del trabajo.", "Madrid es en España.", "Mi madre está ingeniera.", "Las llaves son en la mesa."],
-    answers: ["Estoy cansado.", "Madrid está en España.", "Mi madre es ingeniera.", "Las llaves están en la mesa."],
-    teacherNotes: ["Prioritize the concept, then check the conjugation."],
+  add("error-correction", "error-correction", "Corregí cuatro errores", support("Cambiá el verbo y explicá la razón.", "Change the verb and explain why."), {
+    prompts: ["Soy cansado hoy.", "Madrid es en España.", "Mi madre está arquitecta.", "Las llaves son en la mesa."],
+    answers: ["Estoy cansado hoy.", "Madrid está en España.", "Mi madre es arquitecta.", "Las llaves están en la mesa."],
+    teacherNotes: ["Correct the concept before any smaller language issue."],
     timing: 5,
   });
-  add("context", "illustrated-context", "¿Quién, dónde o cómo?", support("Lee la situación y formula una frase completa.", "Read the situation and make a complete sentence."), {
-    body: "👩‍⚕️ identidad/profesión  ·  📍 ubicación  ·  🙂 emoción  ·  🚪 condición",
-    prompts: ["Lucía / médica", "Lucía / hospital", "Lucía / tranquila", "Puerta / cerrada"],
-    answers: ["Lucía es médica.", "Lucía está en el hospital.", "Lucía está tranquila.", "La puerta está cerrada."],
-    teacherNotes: ["Treat icons as situation cues, not decoration."],
-    timing: 4,
+  add("controlled-practice", "sentence-builder", "Construí frases personales", support("Elegí piezas y creá cuatro frases verdaderas.", "Choose the pieces and build four true sentences."), {
+    body: "YO / MI FAMILIA / MI CIUDAD + SER / ESTAR + IDENTIDAD / ORIGEN / LUGAR / ESTADO",
+    prompts: [
+      support("Yo soy…", "I am…"),
+      support("Yo estoy…", "I am / I feel…"),
+      support("Mi familia es de…", "My family is from…"),
+      support("Mi ciudad está…", "My city is located…"),
+    ],
+    answers: ["Answers vary; require one accurate meaning category per sentence."],
+    teacherNotes: ["Model only the first sentence; let the learner build the rest."],
+    timing: 6,
   });
-  add("personal-questions", "personal-prompts", "Ahora habla de ti", support("Responde con una frase y un detalle.", "Answer with a sentence and one detail."), {
-    prompts: ["¿De dónde eres?", "¿Cuál es tu profesión?", "¿Dónde estás ahora?", "¿Cómo estás hoy?"],
-    answers: ["Answers vary; require the correct verb and a complete sentence."],
-    teacherNotes: ["Follow up naturally; delay correction until the learner finishes."],
-    timing: 5,
+  add("personal-questions", "guided-questions", "Ahora hablá de vos", support("Respondé con una frase completa y un detalle.", "Answer with a complete sentence and one detail."), {
+    prompts: ["¿De dónde sos?", "¿Cuál es tu profesión?", "¿Dónde estás ahora?", "¿Cómo estás hoy?"],
+    answers: ["Answers vary; each response must use the meaning-appropriate verb."],
+    teacherNotes: ["Delay correction until the learner completes the idea."],
+    timing: 6,
   });
-  add("discussion", "dialogue", "Una conversación real", support("Completa y representa el diálogo.", "Complete and perform the dialogue."), {
-    body: "A: Hola, ¿quién ___ la nueva profesora?  B: ___ Ana. ___ de Perú.  A: ¿Dónde ___ ahora?  B: ___ en el aula.",
-    prompts: ["Completa los cinco espacios.", "Representa el diálogo.", "Cambia la profesión y el lugar."],
-    answers: ["es", "Es", "Es", "está", "Está"],
-    teacherNotes: ["Repeat once with new personal details."],
-    timing: 5,
-  });
-  add("review", "recap", "Reto rápido", support("Di SER o ESTAR antes de que termine el tiempo.", "Choose quickly, then justify one answer."), {
-    prompts: ["identidad", "ubicación", "profesión", "emoción"],
+
+  if (!beginner) {
+    add("discussion", "dialogue", "Una conversación real", support("Completá y representá el diálogo.", "Complete and perform the dialogue."), {
+      body: "A: ¿Quién ___ la nueva profesora? B: ___ Ana. ___ de Perú. A: ¿Dónde ___ ahora? B: ___ en el aula.",
+      prompts: ["Completá los cinco espacios.", "Representá el diálogo.", "Cambiá la profesión y el lugar."],
+      answers: ["es", "Es", "Es", "está", "Está"],
+      teacherNotes: ["Repeat once with new personal details."],
+      timing: 5,
+    });
+  }
+
+  add("review", "recap", "Repaso en 30 segundos", support("Mirá la pista y decí SER o ESTAR.", "Look at the cue and say SER or ESTAR."), {
+    prompts: ["identidad", "ubicación", "origen", "emoción"],
     answers: ["SER", "ESTAR", "SER", "ESTAR"],
-    teacherNotes: ["Aim for automatic recall, then one concise explanation."],
+    teacherNotes: ["Finish with fast retrieval and one learner-made example."],
     timing: 3,
   });
-  add("homework", "homework", "Tarea: mi mundo con SER y ESTAR", support("Escribe ocho frases y revisa el verbo.", "Write eight sentences and check the verb."), {
-    prompts: ["2 frases de identidad u origen", "2 de profesión o características", "2 de ubicación", "2 de emociones o condiciones"],
-    answers: ["Teacher check: correct verb, conjugation and meaning category."],
-    teacherNotes: ["Ask the learner to label each category."],
-    timing: 2,
-  });
-  add("answer-key", "recap", "Respuestas y evidencia", "Material privado para el docente.", {
-    body: "SER: identidad, origen, profesión y características. ESTAR: ubicación, estado, emoción y condición.",
-    answers: screens.flatMap((screen) => screen.answers).slice(0, 18),
-    teacherNotes: ["Never display this screen in student mode."],
-    timing: 1,
-  });
+  if (request.includeHomework) {
+    add("homework", "homework", "Tarea: mi mundo", support("Escribí seis frases y marcá el significado.", "Write six sentences and label the meaning."), {
+      prompts: ["2 frases con SER", "2 frases con ESTAR", "2 frases sobre personas o lugares"],
+      answers: ["Teacher check: verb choice, agreement and meaning label."],
+      teacherNotes: ["Keep the task short enough to complete independently."],
+      timing: 2,
+    });
+  }
+  if (!beginner) {
+    add("answer-key", "recap", "Respuestas y evidencia", "Material privado para el docente.", {
+      body: "SER: identidad, origen, profesión. ESTAR: ubicación, estado, emoción y condición.",
+      answers: screens.flatMap((screen) => screen.answers).slice(0, 18),
+      teacherNotes: ["Never display this screen in student mode."],
+      timing: 1,
+    });
+  }
+
   return normalizeActivityTiming(screens, request.duration);
 }

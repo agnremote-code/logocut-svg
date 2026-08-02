@@ -6,6 +6,7 @@ import {
   BeginnerFeedback, BilingualText, ConnectorBank, ExampleReveal, GuidedQuestionList,
   ImageTopicCard, SentenceStarterBank, TopicMenu, TopicNavigation, VerbBank, VocabularyBank,
 } from "@/components/classroom/BeginnerLayouts";
+import { VisualComposition } from "@/components/classroom/VisualComposition";
 import type { LessonDraft, LessonScreen } from "@/types/lesson";
 
 type Props = { lesson: LessonDraft; initialIndex: number; onExit: () => void };
@@ -18,7 +19,11 @@ function Activity({ screen, state, setState }: { screen: LessonScreen; state: Ac
   if (screen.layout === "connector-bank") return <ConnectorBank screen={screen} />;
   if (screen.layout === "guided-questions") return <GuidedQuestionList screen={screen} />;
   if (screen.layout === "feedback") return <BeginnerFeedback screen={screen} />;
-  if (screen.layout === "cover") return <div className="cover-composition" aria-hidden="true"><i /><i /><i /><span>01</span><b>READY TO TEACH</b></div>;
+  if (screen.layout === "cover") return <VisualComposition screen={screen} purpose="cover-atmosphere" />;
+  if (screen.layout === "illustrated-context") return <div className="designed-context">
+    <VisualComposition screen={screen} purpose={screen.type === "video" || screen.type === "source" ? "source-context" : "practice-context"} />
+    {screen.prompts.length > 0 && <div className="context-prompts">{screen.prompts.map((prompt, index) => <article key={prompt}><span>{String(index + 1).padStart(2, "0")}</span><BilingualText value={prompt} /></article>)}</div>}
+  </div>;
   if (screen.layout === "comparison") {
     const [ser = "", estar = ""] = (screen.body ?? "").split(/ESTAR\s*→/i);
     return <div className="grammar-comparison">
@@ -93,8 +98,7 @@ export function ClassroomMode({ lesson, initialIndex, onExit }: Props) {
       <div className="player-session"><span><small>TIME</small>{elapsed}</span><span><small>PLAN</small>{lesson.duration} min</span></div>
       <div className="player-actions">
         <button type="button" onClick={() => setMenuOpen((value) => !value)} aria-expanded={menuOpen}>Menu</button>
-        {teacherMode && <button type="button" onClick={() => setTeacherToolsOpen((value) => !value)} aria-expanded={teacherToolsOpen}>Teacher tools</button>}
-        <button type="button" aria-pressed={!teacherMode} onClick={() => { setTeacherMode((value) => !value); setTeacherToolsOpen(false); }}>{teacherMode ? "Student view" : "Teacher view"}</button>
+        <button type="button" onClick={() => setTeacherToolsOpen((value) => !value)} aria-expanded={teacherToolsOpen}>Teacher tools</button>
         <button type="button" onClick={() => void fullscreen()}>Fullscreen</button>
         <button type="button" onClick={onExit}>Exit</button>
       </div>
@@ -102,8 +106,9 @@ export function ClassroomMode({ lesson, initialIndex, onExit }: Props) {
     </header>
 
     {menuOpen && <aside className="lesson-menu" aria-label="Lesson menu"><h2>Lesson menu</h2>{modules.map((group) => <button type="button" key={group.module} onClick={() => move(group.indexes[0])}><span>{String(modules.indexOf(group) + 1).padStart(2, "0")}</span><b>{group.module}</b><small>{group.minutes} min</small></button>)}</aside>}
-    {teacherMode && teacherToolsOpen && <aside className="teacher-tools-drawer" aria-label="Teacher tools">
+    {teacherToolsOpen && <aside className="teacher-tools-drawer" aria-label="Teacher tools">
       <div><h2>Teacher tools</h2><button type="button" onClick={() => setTeacherToolsOpen(false)}>Close</button></div>
+      <section className="student-view-control"><small>CLASSROOM PRIVACY</small><button type="button" aria-pressed={!teacherMode} onClick={() => setTeacherMode((value) => !value)}>{teacherMode ? "Switch to student view" : "Return to teacher view"}</button></section>
       {screen.teacherNotes[0] && <section><small>GOAL</small><p>{screen.teacherNotes[0]}</p></section>}
       <section><small>SUGGESTED TIME</small><p>{screen.timing} minutes</p></section>
       {screen.answers[0] && <section><small>ANSWER OR MODEL</small><p><BilingualText value={screen.answers[0]} /></p></section>}

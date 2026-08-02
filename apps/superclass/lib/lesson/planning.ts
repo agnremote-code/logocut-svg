@@ -1,5 +1,7 @@
 import { languageContract } from "@/lib/lesson/language";
 import { selectLessonArchetype } from "@/lib/lesson/archetypes";
+import { createCreativeLessonBrief, type CreativeLessonBrief } from "@/lib/lesson/creative-brief";
+import { interpretLessonRequest, type InterpretedLessonIntent } from "@/lib/lesson/intent";
 import type { LessonArchetype, LessonRequest, ScreenLayout } from "@/types/lesson";
 
 export type TopicType = "grammar" | "vocabulary" | "conversation" | "pronunciation" | "reading" | "listening" | "source-comprehension" | "professional-language";
@@ -17,6 +19,8 @@ export type LessonPlan = {
   archetype: LessonArchetype;
   imageSlotPlan: string;
   customInstructions: string;
+  intent: InterpretedLessonIntent;
+  creativeBrief: CreativeLessonBrief;
   specializedTemplate?: "ser-estar" | "present-tense" | "preterite-imperfect" | "por-para" | "subjunctive" | "articles" | "gender-number" | "questions";
 };
 
@@ -35,21 +39,24 @@ function specializedGrammar(topic: string): LessonPlan["specializedTemplate"] {
   return undefined;
 }
 
-export function createLessonPlan(request: LessonRequest): LessonPlan {
-  const material = request.sourceMode === "video" ? request.transcript : request.source;
-  const exactTopic = clean(material.split(/[\n.!?]/)[0] || "Practical language");
+export function createLessonPlan(
+  request: LessonRequest,
+  intent = interpretLessonRequest(request),
+  creativeBrief = createCreativeLessonBrief(request, intent),
+): LessonPlan {
+  const exactTopic = clean(intent.topic || "Practical language");
   const normalizedTopic = normalize(exactTopic);
   const specializedTemplate = specializedGrammar(normalizedTopic);
-  const explicitGrammar = specializedTemplate || request.lessonFocus === "grammar-focused" || /\bverb|verbo|grammar|gramática|tense|tiempo verbal\b/.test(normalizedTopic);
+  const explicitGrammar = specializedTemplate || intent.focus === "grammar-focused" || /\bverb|verbo|grammar|gramática|tense|tiempo verbal\b/.test(normalizedTopic);
   const topicType: TopicType =
-    request.sourceMode !== "idea" ? "source-comprehension"
+    intent.sourceKind === "video" || intent.sourceKind === "source-material" ? "source-comprehension"
       : explicitGrammar ? "grammar"
         : request.lessonFocus === "pronunciation-focused" ? "pronunciation"
           : /job|interview|work|business|professional/.test(normalizedTopic) ? "professional-language"
             : /vocab|famil(?:y|ia)|words|palabras/.test(normalizedTopic) ? "vocabulary"
               : "conversation";
   const serEstar = specializedTemplate === "ser-estar";
-  const archetype = selectLessonArchetype(request);
+  const archetype = selectLessonArchetype(request, intent);
   return {
     exactTopic,
     normalizedTopic,
@@ -67,8 +74,10 @@ export function createLessonPlan(request: LessonRequest): LessonPlan {
     prohibitedContent: /living abroad|vivir en el extranjero/.test(normalizedTopic) ? [] : ["living abroad", "adapting to a new culture", "culture shock"],
     activitySequence: archetype.allowedLayouts,
     archetype: archetype.id,
-    imageSlotPlan: archetype.imageUsage,
+    imageSlotPlan: creativeBrief.imageSlots.map((slot) => `${slot.purpose}: ${slot.fallback}`).join("; "),
     customInstructions: request.customClassInstructions,
+    intent,
+    creativeBrief,
     specializedTemplate,
   };
 }

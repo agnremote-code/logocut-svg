@@ -125,8 +125,13 @@ test("one safe retry can succeed", async () => {
 test("source grounding rejects excerpts absent from supplied material", async () => {
   const request: LessonRequest = {
     ...defaultLessonRequest,
-    sourceMode: "text",
-    source: "Community gardens can lower summer temperatures and help neighbors share practical skills.",
+    sourceMode: "idea",
+    source: [
+      "Community gardens can lower summer temperatures.",
+      "They help neighbors share practical skills.",
+      "One local report compares gardens in three districts.",
+      "The evidence connects shade, food access and stronger community ties.",
+    ].join("\n"),
   };
   const fixture = await validFixture(request);
   const ungrounded = {

@@ -71,6 +71,7 @@ function classroomTitle(raw: string, targetLanguage: LanguageId) {
 
 function inferSourceKind(request: LessonRequest): InterpretedSourceKind {
   if (request.sourceMode === "video") return "video";
+  if (request.sourceMode === "text") return "source-material";
   const source = request.source.trim();
   if (request.customClassInstructions.trim() || /\b(?:include|incluye|start with|empieza con|finish with|termina con|visual style|estilo visual)\b/i.test(source)) return "detailed-brief";
   if (source.length > 700 || source.split(/\n+/).length >= 4) return "source-material";

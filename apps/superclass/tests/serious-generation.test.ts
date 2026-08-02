@@ -49,7 +49,7 @@ test("builder exposes native target/support selectors and keeps language mode co
   assert.match(builder, /Language balance/);
   assert.match(builder, /Smart by level/);
   assert.match(builder, /Bilingual/);
-  assert.match(builder, /<details className="advanced-panel more-control"/);
+  assert.match(builder, /<details className="text-class-more"/);
 });
 
 test("lesson plan locks topic, bilingual contract and prohibited preset leakage", () => {
@@ -86,13 +86,12 @@ test("automatic local captions succeed and unavailable captions fail honestly", 
   );
 });
 
-test("video fallback keeps uploaded media primary and manual transcript secondary", () => {
-  const builder = readFileSync(new URL("../components/LessonBuilder.tsx", import.meta.url), "utf8");
-  const upload = builder.indexOf("Upload audio or video");
-  const manual = builder.indexOf("Paste transcript manually");
-  assert.ok(upload > -1);
-  assert.ok(manual > upload);
-  assert.match(builder, /Imported transcript · editable/);
+test("single-input YouTube flow uses the transcript endpoint and keeps setup failures visible", () => {
+  const app = readFileSync(new URL("../components/LessonApp.tsx", import.meta.url), "utf8");
+  assert.match(app, /detectLessonInput/);
+  assert.match(app, /fetch\("\/api\/transcripts"/);
+  assert.match(app, /YouTube captions are unavailable/);
+  assert.doesNotMatch(app, /mock captions|fake generated/i);
 });
 
 test("ser/estar output obeys topic, language, pedagogy and visual-layout contracts", async () => {
@@ -102,15 +101,15 @@ test("ser/estar output obeys topic, language, pedagogy and visual-layout contrac
   assert.doesNotMatch(text, /living abroad|adapting to a new culture/i);
   assert.ok(topicCoverageScore(lesson, serEstarRequest) >= 0.8);
   assert.equal(validateTopicAndLanguage(lesson, serEstarRequest).ok, true);
-  assert.ok(lesson.screens.some((screen) => screen.layout === "comparison"));
-  assert.ok(lesson.screens.some((screen) => screen.layout === "sorting"));
+  assert.ok(lesson.screens.some((screen) => screen.layout === "grammar-contrast"));
+  assert.ok(lesson.screens.some((screen) => screen.layout === "visual-menu-grid"));
   assert.ok(lesson.screens.some((screen) => screen.type === "error-correction"));
   assert.ok(lesson.screens.some((screen) => screen.type === "personal-questions"));
-  assert.ok(lesson.screens.some((screen) => screen.layout === "dialogue"));
-  assert.ok(lesson.screens.some((screen) => screen.type === "answer-key"));
+  assert.ok(lesson.screens.some((screen) => screen.layout === "role-play-scenario"));
+  assert.equal(lesson.screens.some((screen) => screen.type === "answer-key"), false);
   assert.ok(new Set(lesson.screens.map((screen) => screen.layout)).size >= 6);
-  assert.match(text, /Soy Elena|Estoy contenta|Madrid está en España/);
-  assert.match(text, /Two verbs|Choose|identity/);
+  assert.match(text, /Soy de|Estoy en|Madrid está en España/);
+  assert.match(text, /Two verbs|Choose|identity/i);
   assert.equal(toStudentLesson(lesson).screens.some((screen) => screen.answers.length || screen.teacherNotes.length || screen.type === "answer-key"), false);
 });
 
@@ -140,7 +139,7 @@ test("one structured provider repair preserves the original request", async () =
     async generate(request, providerContext) {
       calls += 1;
       assert.equal(request.source, "Verbos ser y estar");
-      if (calls === 1) return { ...valid, title: "Living abroad", screens: valid.screens.map((screen) => ({ ...screen, title: "Living abroad" })) };
+      if (calls === 1) return { ...valid, screens: [] };
       repairErrors = providerContext.repairErrors;
       return valid;
     },

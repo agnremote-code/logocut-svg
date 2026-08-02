@@ -1,6 +1,6 @@
 export const lessonLevels = ["A0", "A1", "A2", "B1", "B2", "C1", "C2"] as const;
 export const lessonDurations = [25, 30, 45, 50, 60, 90] as const;
-export const sourceModes = ["idea", "video"] as const;
+export const sourceModes = ["idea", "text", "video"] as const;
 export const lessonFocuses = ["conversation", "balanced", "grammar-focused", "pronunciation-focused", "source-comprehension"] as const;
 export const visualStyles = ["light-editorial", "clean-classroom", "editorial", "dark-debate", "travel", "corporate", "retro-game"] as const;
 export const lessonFormats = [
@@ -54,7 +54,24 @@ export const screenLayouts = [
   "connector-bank",
   "guided-questions",
   "feedback",
+  "hero-cover",
+  "visual-menu-grid",
+  "split-image-questions",
+  "how-it-works-cards",
+  "map-hub",
+  "vocabulary-expression-bank",
+  "role-play-scenario",
+  "photo-choice",
+  "opinion-switch",
+  "rapid-fire",
+  "final-manifesto",
+  "dynamic-panel",
+  "grammar-contrast",
+  "canva-sentence-builder",
+  "feedback-screen",
 ] as const;
+
+export const visualSystems = ["bright-classroom", "editorial", "bold-quest", "playful-map"] as const;
 
 export type LessonLevel = (typeof lessonLevels)[number];
 export type LessonDuration = number;
@@ -67,6 +84,7 @@ export type SkillFocus = (typeof skills)[number];
 export type LanguageId = (typeof languageIds)[number];
 export type LanguageMode = (typeof languageModes)[number];
 export type ScreenLayout = (typeof screenLayouts)[number];
+export type VisualSystem = (typeof visualSystems)[number];
 export type StudentType = "individual" | "group";
 export type PracticeDensity = "compact" | "standard" | "repetition-heavy";
 export type Dialect = "neutral" | "rioplatense" | "spain" | "mexican" | "custom";

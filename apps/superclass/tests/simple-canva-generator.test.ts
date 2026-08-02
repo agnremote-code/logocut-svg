@@ -1,242 +1,141 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { canvaLayoutNames, countInteractiveScreens } from "../lib/lesson/canva-storyboard";
 import { createCreativeLessonBrief, hasRepeatedLayoutRun } from "../lib/lesson/creative-brief";
+import { applyDetectedInput, detectLessonInput } from "../lib/lesson/input-detection";
 import { interpretLessonRequest } from "../lib/lesson/intent";
 import { languageOptions } from "../lib/lesson/language";
 import { disabledGenerationCache } from "../lib/providers/cache";
 import type { ProviderConfig } from "../lib/providers/config";
 import { generateLesson } from "../lib/providers/generate";
 import { deterministicProvider } from "../lib/providers/local";
-import {
-  configuredVisualAssetProvider,
-  resolveVisualAsset,
-  teacherUploadVisualAssetProvider,
-} from "../lib/visual-assets";
-import { validateLessonDraft, validateLessonRequest } from "../lib/validation/lesson";
-import { defaultLessonRequest, emptyLessonRequest, sourceModes, type LessonRequest } from "../types/lesson";
+import { validateLessonDraft } from "../lib/validation/lesson";
+import { defaultLessonRequest, emptyLessonRequest, type LessonRequest } from "../types/lesson";
 
 const file = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 const builder = file("../components/LessonBuilder.tsx");
 const app = file("../components/LessonApp.tsx");
+const workspace = file("../components/LessonWorkspace.tsx");
 const classroom = file("../components/ClassroomMode.tsx");
+const layouts = file("../components/canva/CanvaLayouts.tsx");
 const css = file("../app/globals.css");
-const config: ProviderConfig = {
-  provider: "local",
-  openAiModel: "unused-in-local-tests",
-  timeoutMs: 1_000,
-  maxSourceChars: 12_000,
-  cache: "none",
-};
+const config: ProviderConfig = { provider: "local", openAiModel: "unused", timeoutMs: 1_000, maxSourceChars: 12_000, cache: "none" };
 
-const serEstarRequest: LessonRequest = {
+const acceptanceRequest: LessonRequest = {
   ...defaultLessonRequest,
-  sourceMode: "idea",
-  source: "Haceme una clase sobre verbos er estar",
+  source: "Create a B1 Spanish class about SER and ESTAR for an English-speaking student. Focus on speaking and common mistakes.",
   language: "es",
   supportLanguage: "en",
-  languageMode: "bilingual",
-  level: "A1",
+  level: "B1",
   duration: 60,
-  lessonFocus: "balanced",
-  lessonFormat: "automatic",
-  customClassInstructions: "",
-  includeHomework: true,
 };
 
-test("builder has exactly two unified creation modes and starts empty", () => {
-  assert.deepEqual(sourceModes, ["idea", "video"]);
-  assert.match(builder, /Idea or material/);
-  assert.match(builder, /YouTube video/);
-  assert.doesNotMatch(builder, /value:\s*"text"|>\s*Text\s*</);
+test("the visible builder is one input with four essentials and collapsed More options", () => {
+  assert.match(builder, /What do you want to teach\?/);
+  assert.match(builder, /Describe the class, paste material, or add a YouTube link\.\.\./);
+  assert.match(builder, /Target language/);
+  assert.match(builder, /Student level/);
+  assert.match(builder, /Duration/);
+  assert.match(builder, /Create class/);
+  assert.match(builder, /<details className="text-class-more"/);
+  assert.doesNotMatch(builder, /mode-tabs|Idea or material|YouTube video|Text or transcript|Copy prompt for ChatGPT/i);
   assert.equal(emptyLessonRequest.source, "");
-  assert.match(app, /useState<LessonRequest>\(emptyLessonRequest\)/);
+  assert.match(app, /detectLessonInput/);
 });
 
-test("builder uses native language selects with Spanish and English first", () => {
-  assert.deepEqual(languageOptions.slice(0, 2), [
-    { id: "es", label: "Spanish" },
-    { id: "en", label: "English" },
-  ]);
+test("language selectors are native and Spanish and English come first", () => {
+  assert.deepEqual(languageOptions.slice(0, 2), [{ id: "es", label: "Spanish" }, { id: "en", label: "English" }]);
   assert.match(builder, /<select id=\{id\}/);
   assert.match(builder, /id="target-language"/);
   assert.match(builder, /id="support-language"/);
   assert.doesNotMatch(builder, /datalist|role="combobox"/);
+  assert.ok(builder.indexOf("Support language") > builder.indexOf('<details className="text-class-more"'));
 });
 
-test("only essential controls are visible before the collapsed More control", () => {
-  const moreControl = builder.indexOf('<details className="advanced-panel more-control"');
-  assert.ok(moreControl > -1);
-  for (const label of ["Target language", "Support language", "CEFR level", "Duration", "Generate class"]) {
-    assert.ok(builder.indexOf(label) > -1);
-    assert.ok(builder.indexOf(label) < moreControl || label === "Generate class");
-  }
-  for (const label of ["Dialect", "Class type", "Teaching focus", "Language balance", "Visual direction", "Specific instructions"]) {
-    assert.ok(builder.indexOf(label) > moreControl);
-  }
-  assert.match(app, /useState\(false\)[\s\S]*advancedOpen/);
-  assert.doesNotMatch(builder, /Copy prompt for ChatGPT|navigator\.clipboard|chatgpt|openai\.com/i);
+test("input detection separates ideas, material, notes, transcripts and YouTube", () => {
+  assert.equal(detectLessonInput("A B1 lesson about weekend plans").kind, "idea");
+  assert.equal(detectLessonInput("https://www.youtube.com/watch?v=caption0001").kind, "youtube");
+  assert.equal(detectLessonInput("- Goal: speaking\n- Vocabulary: travel\n- Activity: role play").kind, "lesson-notes");
+  assert.equal(detectLessonInput("Teacher: Welcome.\nStudent: Thank you.\nTeacher: What did you notice?").kind, "transcript");
+  assert.equal(detectLessonInput("Long source paragraph. ".repeat(35)).kind, "source-material");
+  const prepared = applyDetectedInput(defaultLessonRequest, detectLessonInput("Long source paragraph. ".repeat(35)));
+  assert.equal(prepared.sourceMode, "text");
+  assert.equal(prepared.lessonFocus, "source-comprehension");
 });
 
-test("intent interpreter separates and normalizes the raw SER/ESTAR command", () => {
-  const intent = interpretLessonRequest(serEstarRequest);
-  assert.equal(intent.title, "SER y ESTAR");
-  assert.equal(intent.topic, "ser y estar");
-  assert.equal(intent.focus, "grammar-focused");
-  assert.deepEqual(intent.grammarTargets, ["ser", "estar"]);
-  assert.equal(intent.requestedLevel, "A1");
-  assert.equal(intent.requestedLanguage, "es");
-  assert.doesNotMatch(`${intent.title} ${intent.topic}`, /Haceme|er estar/i);
+test("creative brief normalizes SER/ESTAR and selects a complete visual storyboard", () => {
+  const intent = interpretLessonRequest(acceptanceRequest);
+  const brief = createCreativeLessonBrief(acceptanceRequest, intent);
+  assert.equal(brief.normalizedTitle, "SER y ESTAR");
+  assert.equal(brief.topic, "Spanish grammar contrast");
+  assert.equal(brief.level, "B1");
+  assert.equal(brief.duration, 60);
+  assert.equal(brief.visualSystem, "bright-classroom");
+  assert.match(brief.visualMotif, /identity cards/i);
+  assert.equal(brief.screenSequence.length, 14);
+  assert.ok(brief.interactions.length >= 6);
+  assert.match(brief.sourceGrounding, /No external factual claims/i);
 });
 
-test("creative brief defines an art-directed storyboard before planning", () => {
-  const intent = interpretLessonRequest(serEstarRequest);
-  const brief = createCreativeLessonBrief(serEstarRequest, intent);
-  assert.match(brief.objective, /SER[\s\S]*ESTAR/i);
-  assert.ok(brief.narrativeArc.length >= 6);
-  assert.match(brief.visualDirection, /16:9[\s\S]*typographic hierarchy/i);
-  assert.match(brief.languageBalance, /Target language[\s\S]*support language/i);
-  assert.deepEqual(brief.requiredContent.slice(0, 4), ["identity", "origin", "profession", "location"]);
-  assert.equal(brief.screenPurposes.length, 13);
-  assert.ok(brief.imageSlots.every((slot) => slot.provider === "local"));
+test("all fifteen Canva IA 2 layouts are native components", () => {
+  assert.deepEqual(canvaLayoutNames, ["HeroCover", "VisualMenuGrid", "SplitImageQuestions", "HowItWorksCards", "MapHub", "VocabularyExpressionBank", "RolePlayScenario", "PhotoChoice", "OpinionSwitch", "RapidFire", "FinalManifesto", "DynamicPanel", "GrammarContrast", "SentenceBuilder", "FeedbackScreen"]);
+  for (const name of canvaLayoutNames) assert.match(layouts, new RegExp(`export function ${name}`));
+  assert.doesNotMatch(layouts, /canva-sdk|tailwindcdn|<svg|from ["']@canva/i);
 });
 
-test("A1 SER/ESTAR is a validated 13-screen professional lesson", async () => {
-  const lesson = await generateLesson(serEstarRequest, deterministicProvider, {
-    config,
-    cache: disabledGenerationCache,
-    logger() {},
-  });
-  const studentScreens = lesson.screens.filter((screen) => screen.type !== "answer-key");
+test("the exact B1 SER/ESTAR acceptance class is a validated 14-screen presentation", async () => {
+  const lesson = await generateLesson(acceptanceRequest, deterministicProvider, { config, cache: disabledGenerationCache, logger() {} });
   assert.equal(lesson.title, "SER y ESTAR");
-  assert.equal(studentScreens.length, 13);
-  assert.deepEqual(studentScreens.map((screen) => screen.title), [
-    "SER y ESTAR",
-    "Meta de hoy",
-    "Dos verbos, dos funciones",
-    "Personas y lugares con SER",
-    "Personas y lugares con ESTAR",
-    "¿SER o ESTAR?",
-    "Uní ejemplo y significado",
-    "Completá frases cortas",
-    "Corregí cuatro errores",
-    "Construí frases personales",
-    "Ahora hablá de vos",
-    "Repaso en 30 segundos",
-    "Tarea: mi mundo",
+  assert.equal(lesson.duration, 60);
+  assert.equal(lesson.screens.length, 14);
+  assert.deepEqual(lesson.screens.map((screen) => screen.title), [
+    "SER y ESTAR", "El recorrido", "Dos verbos, dos funciones", "Frases que abren la conversación", "¿Qué verbo ves?", "Clasificá por significado", "Una diferencia que cambia todo", "Construí la idea", "Cambiá el verbo, cambiá el mensaje", "Una conversación real", "Tu mundo en ocho frases", "Ronda rápida", "Tu desafío final", "Lo que ya podés hacer",
   ]);
-  assert.deepEqual(studentScreens.map((screen) => screen.layout), [
-    "cover",
-    "objective",
-    "comparison",
-    "example-gallery",
-    "illustrated-context",
-    "multiple-choice",
-    "sorting",
-    "fill-gap",
-    "error-correction",
-    "sentence-builder",
-    "guided-questions",
-    "recap",
-    "homework",
+  assert.deepEqual(lesson.screens.map((screen) => screen.layout), [
+    "hero-cover", "how-it-works-cards", "grammar-contrast", "vocabulary-expression-bank", "photo-choice", "visual-menu-grid", "dynamic-panel", "canva-sentence-builder", "opinion-switch", "role-play-scenario", "split-image-questions", "rapid-fire", "final-manifesto", "feedback-screen",
   ]);
-  assert.equal(studentScreens.some((screen) => screen.type === "answer-key"), false);
-  assert.equal(hasRepeatedLayoutRun(studentScreens.map((screen) => screen.layout)), false);
-  assert.equal(new Set(studentScreens.map((screen) => `${screen.type}:${screen.title}`)).size, 13);
-  assert.doesNotMatch(JSON.stringify(studentScreens[0]), /Palabras.*Verbos.*Frases.*Preguntas|Haceme|er estar/i);
-  assert.equal(validateLessonDraft(lesson, { ...serEstarRequest, lessonFocus: "grammar-focused", lessonFormat: "grammar-workshop" }).ok, true);
-});
-
-test("B1 idea conversation survives the full interpretation and validation pipeline", async () => {
-  const request: LessonRequest = {
-    ...defaultLessonRequest,
-    source: "Create a B1 conversation lesson about planning a meaningful weekend with friends, with useful phrases and a realistic dialogue.",
-    language: "en",
-    supportLanguage: "es",
-    level: "B1",
-    duration: 60,
-    lessonFocus: "conversation",
-  };
-  const lesson = await generateLesson(request, deterministicProvider, {
-    config,
-    cache: disabledGenerationCache,
-    logger() {},
-  });
-  assert.equal(lesson.title, "Planning a meaningful weekend with friends");
-  assert.equal(lesson.archetype, "intermediate-conversation");
+  assert.ok(new Set(lesson.screens.map((screen) => screen.layout)).size >= 4);
+  assert.ok(countInteractiveScreens(lesson.screens) >= 4);
+  assert.ok(countInteractiveScreens(lesson.screens) / lesson.screens.length >= .4);
   assert.equal(hasRepeatedLayoutRun(lesson.screens.map((screen) => screen.layout)), false);
-  assert.equal(validateLessonDraft(lesson, request).ok, true);
+  assert.ok(lesson.screens.some((screen) => screen.type === "error-correction"));
+  assert.ok(lesson.screens.some((screen) => screen.layout === "role-play-scenario"));
+  assert.ok(lesson.screens.some((screen) => screen.layout === "split-image-questions"));
+  assert.equal(validateLessonDraft(lesson, { ...acceptanceRequest, lessonFocus: "grammar-focused", lessonFormat: "grammar-workshop" }).ok, true);
+  assert.doesNotMatch(lesson.title, /Create a B1/i);
 });
 
-test("B2 YouTube captions become a source-grounded class with an interpreted title", async () => {
-  const request: LessonRequest = {
-    ...defaultLessonRequest,
-    sourceMode: "video",
-    source: "",
-    videoUrl: "https://youtu.be/caption0001",
-    transcript: "In this video, the speaker explains how small daily habits shape language learning. The main idea is to practise consistently, notice useful expressions, and use them in meaningful conversations.",
-    language: "en",
-    supportLanguage: "es",
-    level: "B2",
-    duration: 60,
-    lessonFocus: "source-comprehension",
-  };
-  const lesson = await generateLesson(request, deterministicProvider, {
-    config,
-    cache: disabledGenerationCache,
-    logger() {},
-  });
-  assert.equal(lesson.title, "Small daily habits shape language learning");
-  assert.equal(lesson.level, "B2");
-  assert.equal(lesson.archetype, "source-comprehension");
+test("generated classes open directly into one edit field and the required actions", () => {
+  assert.match(app, /if \(lesson\) return/);
+  assert.match(workspace, /Describe a change\.\.\./);
+  assert.match(workspace, /Regenerate this screen/);
+  assert.match(workspace, />Present</);
+  assert.match(workspace, /Saved ✓|>Save</);
+  assert.doesNotMatch(workspace, /Edit mode|Download Student Workbook|Unlock the Full Lesson/);
+});
+
+test("teacher answers are hidden by default and presentation has no permanent teacher panel", () => {
+  assert.match(layouts, /const \[open, setOpen\] = useState\(false\)/);
+  assert.match(layouts, /open && <aside/);
+  assert.doesNotMatch(classroom, /teacher-tools-drawer|private-teacher-panel|teacherMode/);
+});
+
+test("the stage is true 16:9, near-full-width and responsive", () => {
+  assert.match(css, /\.canva-canvas[^}]*aspect-ratio:16\/9/);
+  assert.match(css, /\.canva-presenter>main \.canva-canvas\{width:min\(92vw/);
+  assert.match(css, /@media \(max-width:620px\)/);
+  assert.match(css, /\.canva-presenter>main \.canva-canvas\{width:96vw\}/);
+  assert.match(css, /container-type:inline-size/);
+  assert.match(css, /overflow:hidden/);
+});
+
+test("YouTube stays transcript-grounded and never makes a paid test call", async () => {
+  const input = detectLessonInput("https://youtu.be/caption0001");
+  const request = { ...applyDetectedInput(defaultLessonRequest, input), transcript: "The speaker compares two study habits and explains why short daily practice is sustainable.", language: "en" as const, level: "B2" as const, duration: 60 };
+  const lesson = await generateLesson(request, deterministicProvider, { config, cache: disabledGenerationCache, logger() {} });
+  assert.equal(lesson.sourceMode, "video");
   assert.ok(lesson.screens.some((screen) => screen.videoId === "caption0001"));
-  assert.ok(lesson.screens.some((screen) => screen.sourceExcerpt?.startsWith("In this video")));
+  assert.ok(lesson.screens.some((screen) => screen.sourceExcerpt?.startsWith("The speaker")));
   assert.equal(validateLessonDraft(lesson, request).ok, true);
-});
-
-test("screen density, blank optional instructions and source-grounded modes validate", async () => {
-  assert.equal(validateLessonRequest({ ...defaultLessonRequest, customClassInstructions: "" }).ok, true);
-  const lesson = await deterministicProvider.generate(serEstarRequest, {
-    requestId: "density",
-    contentHash: "density",
-    intent: interpretLessonRequest(serEstarRequest),
-  });
-  assert.ok(lesson.screens.every((screen) => screen.title.length <= (screen.type === "cover" ? 90 : 68)));
-  assert.ok(lesson.screens.every((screen) => (screen.body?.length ?? 0) <= 360));
-  assert.ok(lesson.screens.every((screen) => screen.prompts.length <= 4));
-});
-
-test("YouTube captions remain primary and fallbacks appear only after failure", () => {
-  assert.match(builder, /Paste a YouTube link\. Superclass will use available captions to build the class\./);
-  assert.match(builder, /fetch\("\/api\/transcripts"/);
-  assert.match(builder, /transcriptStatus === "unavailable" \|\| transcriptStatus === "error"/);
-  const fallbackGate = builder.indexOf('transcriptStatus === "unavailable" || transcriptStatus === "error"');
-  assert.ok(builder.indexOf("Upload audio or video") > fallbackGate);
-  assert.ok(builder.indexOf("Paste transcript manually") > builder.indexOf("Upload audio or video"));
-});
-
-test("visual providers use real local SVG compositions without paid calls", () => {
-  const slot = {
-    purpose: "cover-atmosphere" as const,
-    screen: { type: "cover" as const, layout: "cover" as const, title: "SER y ESTAR", body: "identity and location" },
-  };
-  const asset = resolveVisualAsset(slot);
-  assert.equal(asset?.source, "local");
-  assert.equal(asset?.kind, "svg-composition");
-  assert.equal(asset?.composition, "ser-estar-orbit");
-  assert.match(asset?.credit ?? "", /Repository-owned/);
-  assert.equal(configuredVisualAssetProvider.resolve(slot), null);
-  assert.equal(teacherUploadVisualAssetProvider.resolve(slot), null);
-});
-
-test("player and CSS preserve 16:9 hierarchy without a permanent teacher panel", () => {
-  assert.match(css, /aspect-ratio:\s*16\s*\/\s*9/);
-  assert.match(css, /\.lesson-player[\s\S]*overflow:\s*hidden/);
-  assert.match(css, /@media \(max-width: 560px\)[\s\S]*\.simple-essential-grid\s*\{\s*grid-template-columns:\s*1fr/);
-  assert.match(css, /@media \(max-width: 560px\)[\s\S]*\.lesson-player \.classroom-canvas\s*\{\s*overflow-y:\s*auto/);
-  assert.match(css, /@media \(max-width: 700px\)[\s\S]*\.lesson-player \.player-actions button:nth-child\(2\)\s*\{\s*display:\s*inline-flex/);
-  assert.match(classroom, /useState\(false\)[\s\S]*teacherToolsOpen/);
-  assert.match(classroom, /teacherToolsOpen && <aside/);
-  assert.doesNotMatch(classroom, /private-teacher-panel|panelOpen/);
-  assert.match(classroom, /<VisualComposition screen=\{screen\} purpose="cover-atmosphere"/);
 });

@@ -10,15 +10,17 @@ const context = { requestId: "teacher-first", contentHash: "teacher-first-hash" 
 const file = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
 const classroom = file("../components/ClassroomMode.tsx");
 const builder = file("../components/LessonBuilder.tsx");
-const landing = `${file("../components/LessonApp.tsx")} ${file("../components/MarketingSections.tsx")} ${file("../components/PlatformCompatibility.tsx")}`;
+const landing = `${file("../components/LessonApp.tsx")} ${builder}`;
+const layouts = file("../components/canva/CanvaLayouts.tsx");
 const css = file("../app/globals.css");
 
 const request = (partial: Partial<LessonRequest>): LessonRequest => ({ ...defaultLessonRequest, ...partial });
 
-test("product positioning consistently includes tutors and teachers", () => {
-  assert.match(landing, /tutors and teachers/i);
-  assert.match(landing, /Describe the class\. Open it\. Teach it\./);
-  assert.match(landing, /Preply[\s\S]*italki/);
+test("product positioning is the focused Text to Class promise", () => {
+  assert.match(landing, /TEXT TO CLASS/);
+  assert.match(landing, /What do you want to teach\?/);
+  assert.match(landing, /Describe the class, paste material, or add a YouTube link/);
+  assert.doesNotMatch(landing, /Pricing preview|Preply|italki/);
 });
 
 test("Light Editorial is the default and its active palette has readable text", () => {
@@ -28,18 +30,17 @@ test("Light Editorial is the default and its active palette has readable text", 
   assert.doesNotMatch(activeTheme, /#b6ef35|#d9ff61|color:\s*white/i);
 });
 
-test("Teacher tools are closed by default and no permanent teacher panel remains", () => {
-  assert.match(classroom, /useState\(false\)[\s\S]*teacherToolsOpen|teacherToolsOpen[\s\S]*useState\(false\)/);
-  assert.doesNotMatch(classroom, /private-teacher-panel|PRIVATE TEACHER PANEL|panelOpen/);
-  assert.match(classroom, /Teacher tools/);
-  assert.match(classroom, /teacherToolsOpen && <aside/);
+test("teacher answers are closed by default and no permanent teacher panel remains", () => {
+  assert.match(layouts, /const \[open, setOpen\] = useState\(false\)/);
+  assert.doesNotMatch(classroom, /private-teacher-panel|PRIVATE TEACHER PANEL|panelOpen|teacher-tools-drawer/);
+  assert.match(layouts, /Respuesta docente/);
+  assert.match(layouts, /open && <aside/);
 });
 
-test("student mode remains inside teacher tools and hides answers", () => {
-  assert.match(classroom, /aria-pressed=\{!teacherMode\}/);
-  assert.match(classroom, /teacherMode \? "Switch to student view"/);
-  assert.match(classroom, /teacherMode && screen\.answers\.length/);
-  assert.match(classroom, /teacherMode && state\.revealed/);
+test("student canvas never renders answers before the teacher explicitly reveals them", () => {
+  assert.match(layouts, /if \(!screen\.answers\.length && !screen\.teacherNotes\.length\) return null/);
+  assert.match(layouts, /aria-expanded=\{open\}/);
+  assert.match(layouts, /\{open && <aside/);
 });
 
 test("beginner engine is bilingual, bank-based and limits questions", async () => {
@@ -56,19 +57,20 @@ test("beginner engine is bilingual, bank-based and limits questions", async () =
   assert.match(JSON.stringify(lesson), /Buenos Aires[\s\S]*interesting|interesante[\s\S]*interesting/i);
 });
 
-test("intermediate ser/estar is a 14-screen grammar workshop plus private key", async () => {
+test("intermediate ser/estar is a 14-screen Canva-quality grammar workshop", async () => {
   const lesson = await deterministicProvider.generate(request({
     source: "Una clase práctica de gramática sobre ser y estar.",
     level: "B1", duration: 50, lessonFormat: "grammar-workshop", lessonFocus: "grammar-focused",
   }), context);
   assert.equal(lesson.archetype, "intermediate-grammar-workshop");
-  assert.equal(lesson.screens.filter((screen) => screen.type !== "answer-key").length, 14);
-  assert.deepEqual(lesson.screens.filter((screen) => screen.type !== "answer-key").map((screen) => screen.layout), [
-    "cover", "objective", "comparison", "example-gallery", "illustrated-context", "multiple-choice", "sorting", "fill-gap",
-    "error-correction", "sentence-builder", "guided-questions", "dialogue", "recap", "homework",
+  assert.equal(lesson.screens.length, 14);
+  assert.deepEqual(lesson.screens.map((screen) => screen.layout), [
+    "hero-cover", "how-it-works-cards", "grammar-contrast", "vocabulary-expression-bank", "photo-choice", "visual-menu-grid", "dynamic-panel", "canva-sentence-builder",
+    "opinion-switch", "role-play-scenario", "split-image-questions", "rapid-fire", "final-manifesto", "feedback-screen",
   ]);
-  assert.match(JSON.stringify(lesson), /identity and origin[\s\S]*location and state/i);
-  assert.doesNotMatch(classroom, /TEACHER ANSWER \/ MODEL/);
+  assert.match(JSON.stringify(lesson), /identity\/origin[\s\S]*location\/state/i);
+  assert.equal(lesson.screens.some((screen) => screen.answers.length > 0), true);
+  assert.doesNotMatch(classroom, /TEACHER ANSWER \/ MODEL|teacherMode/);
 });
 
 test("advanced engine uses editorial and debate structures instead of beginner banks", async () => {
@@ -95,16 +97,16 @@ test("automatic archetype selection responds to level, source and focus", () => 
 
 test("builder keeps specific instructions internal and removes the ChatGPT helper", () => {
   assert.match(builder, /Specific instructions/);
-  assert.match(builder, /More control/);
+  assert.match(builder, /More options/);
   assert.doesNotMatch(builder, /Copy prompt for ChatGPT|navigator\.clipboard\.writeText|chatgpt|openai\.com/i);
 });
 
-test("classroom CSS preserves 16:9 desktop fit and mobile overflow safety", () => {
+test("Canva classroom CSS preserves 16:9 desktop fit and mobile scaling", () => {
   assert.match(css, /aspect-ratio:\s*16\s*\/\s*9/);
-  assert.match(css, /@media \(max-width: 560px\)[\s\S]*max-height:\s*calc\(100vh - 180px\)/);
-  assert.match(css, /\.lesson-player\s*\{[\s\S]*overflow:\s*hidden/);
-  assert.match(css, /\.classroom-canvas[\s\S]*min-width:\s*0/);
-  assert.match(css, /word-wrap|overflow-wrap/);
+  assert.match(css, /\.canva-presenter[^}]+overflow:hidden/);
+  assert.match(css, /\.canva-presenter>main \.canva-canvas\{width:min\(92vw/);
+  assert.match(css, /@media \(max-width:620px\)/);
+  assert.match(css, /container-type:inline-size/);
 });
 
 test("PDFs follow the selected archetype without exposing private answers to students", async () => {

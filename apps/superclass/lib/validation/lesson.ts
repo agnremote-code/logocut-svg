@@ -5,6 +5,7 @@ import {
   languageModes,
   lessonLevels,
   skills,
+  screenLayouts,
   sourceModes,
   visualStyles,
   type LessonDraft,
@@ -190,7 +191,7 @@ export function validateLessonDraft(input: unknown, request?: LessonRequest): Va
     if (!isStringArray(screen.answers)) errors.push(`Answers are invalid on ${screen.id}.`);
     if (!isStringArray(screen.teacherNotes)) errors.push(`Teacher notes are invalid on ${screen.id}.`);
     if (!Number.isInteger(screen.timing) || screen.timing < 0) errors.push(`Timing is invalid on ${screen.id}.`);
-    if (!isString(screen.layout)) errors.push(`Layout is invalid on ${screen.id}.`);
+    if (!includes(screenLayouts, screen.layout)) errors.push(`Layout is invalid on ${screen.id}.`);
     if (screen.sourceExcerpt !== undefined && !isString(screen.sourceExcerpt)) errors.push(`Source excerpt is invalid on ${screen.id}.`);
     if (screen.videoId !== undefined && !isString(screen.videoId)) errors.push(`Video ID is invalid on ${screen.id}.`);
     if (Array.isArray(screen.prompts) && screen.prompts.length > rule.questions) errors.push(`Too many prompts on ${screen.id}.`);

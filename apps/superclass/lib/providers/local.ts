@@ -346,7 +346,7 @@ function buildScreens(request: LessonRequest, topic: string, intent: Interpreted
   }
 
   const target = targetScreenCount(request.duration, request.level);
-  const protectedTypes: ScreenType[] = ["cover", "objective", "warmup", "vocabulary", "discussion", "debate", "review", "exit-task"];
+  const protectedTypes: ScreenType[] = ["cover", "objective", "warmup", "source", "video", "comprehension", "vocabulary", "discussion", "debate", "review", "exit-task"];
   while (screens.length > target - 1) {
     const removable = screens.findIndex((item, index) => index > 2 && !protectedTypes.includes(item.type));
     if (removable === -1) break;

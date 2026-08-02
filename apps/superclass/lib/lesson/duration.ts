@@ -5,18 +5,22 @@ export function isValidLessonDuration(value: unknown): value is number {
 }
 
 export function targetScreenCount(duration: number, level?: LessonLevel) {
-  if (level === "A0" || level === "A1") {
-    if (duration <= 30) return 7;
-    if (duration <= 45) return 10;
-    if (duration <= 60) return 12;
-    return Math.max(13, Math.min(22, Math.round(duration * 0.18)));
-  }
-  return Math.max(7, Math.min(36, Math.round(duration * 0.29)));
+  void level;
+  if (duration <= 30) return 9;
+  if (duration <= 45) return 11;
+  if (duration <= 60) return 14;
+  if (duration <= 90) return 18;
+  return Math.max(19, Math.min(24, Math.round(duration * 0.2)));
 }
 
 export function lessonScreenRange(duration: number, level?: LessonLevel): [number, number] {
-  const target = targetScreenCount(duration, level);
-  return [Math.max(6, target - 2), Math.min(38, target + 3)];
+  void level;
+  if (duration <= 30) return [8, 10];
+  if (duration <= 45) return [10, 12];
+  if (duration <= 60) return [12, 15];
+  if (duration <= 90) return [16, 20];
+  const target = targetScreenCount(duration);
+  return [Math.max(18, target - 2), Math.min(26, target + 2)];
 }
 
 export function normalizeActivityTiming<T extends { timing: number }>(activities: T[], duration: number): T[] {

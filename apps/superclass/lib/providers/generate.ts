@@ -19,6 +19,7 @@ import { createCreativeLessonBrief } from "@/lib/lesson/creative-brief";
 import { applyInterpretedIntent, interpretLessonRequest } from "@/lib/lesson/intent";
 import type { CreativeLessonBrief } from "@/lib/lesson/creative-brief";
 import type { InterpretedLessonIntent } from "@/lib/lesson/intent";
+import { applyCanvaStoryboard } from "@/lib/lesson/canva-storyboard";
 
 type GenerationOptions = {
   config?: ProviderConfig;
@@ -61,8 +62,8 @@ async function withTimeout(
   }
 }
 
-function normalizeLesson(input: LessonDraft, request: LessonRequest, requestId: string, contentHash: string, intent: InterpretedLessonIntent): LessonDraft {
-  return {
+function normalizeLesson(input: LessonDraft, request: LessonRequest, requestId: string, contentHash: string, intent: InterpretedLessonIntent, creativeBrief: CreativeLessonBrief): LessonDraft {
+  const normalized: LessonDraft = {
     ...input,
     schemaVersion: 1,
     id: input.id || `lesson-${contentHash}`,
@@ -77,6 +78,7 @@ function normalizeLesson(input: LessonDraft, request: LessonRequest, requestId: 
     sourceMode: request.sourceMode,
     profileId: request.profileId || undefined,
     createdAt: new Date().toISOString(),
+    title: intent.title,
     screens: input.screens.map((screen) => ({
       ...screen,
       body: screen.body || undefined,
@@ -84,6 +86,7 @@ function normalizeLesson(input: LessonDraft, request: LessonRequest, requestId: 
       videoId: screen.videoId || undefined,
     })),
   };
+  return applyCanvaStoryboard(normalized, creativeBrief);
 }
 
 export async function generateLesson(
@@ -99,7 +102,7 @@ export async function generateLesson(
   const model = provider.name === "openai" ? config.openAiModel : provider.name;
   const requestId = randomUUID();
   const contentHash = createHash("sha256")
-    .update(JSON.stringify({ schema: 2, provider: provider.name, model, request: interpretedRequest, intent, creativeBrief }))
+    .update(JSON.stringify({ schema: 3, provider: provider.name, model, request: interpretedRequest, intent, creativeBrief }))
     .digest("hex")
     .slice(0, 24);
   const activeSource = interpretedRequest.sourceMode === "video" ? interpretedRequest.transcript : interpretedRequest.source;
@@ -147,7 +150,7 @@ export async function generateLesson(
           repairErrors = structural.errors;
           throw new ProviderError(`Generated lesson failed validation: ${structural.errors.join(" ")}`, "invalid-response", attempts < 2);
         }
-        const lesson = normalizeLesson(structural.value, interpretedRequest, requestId, contentHash, intent);
+        const lesson = normalizeLesson(structural.value, interpretedRequest, requestId, contentHash, intent, creativeBrief);
         const validated = validateLessonDraft(lesson, interpretedRequest);
         validation = validated.ok ? "valid" : "invalid";
         if (!validated.ok) {

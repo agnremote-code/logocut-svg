@@ -1,4 +1,5 @@
 import { targetScreenCount } from "@/lib/lesson/duration";
+import type { InterpretedLessonIntent } from "@/lib/lesson/intent";
 import type { LessonArchetype, LessonFormat, LessonRequest, ScreenLayout } from "@/types/lesson";
 
 export type LessonEngine = "beginner" | "intermediate" | "advanced";
@@ -21,7 +22,7 @@ export type LessonArchetypeDefinition = {
 const definitions: Record<LessonArchetype, LessonArchetypeDefinition> = {
   "beginner-visual-topic": {
     id: "beginner-visual-topic", label: "Beginner visual vocabulary", engine: "beginner",
-    allowedLayouts: ["topic-menu", "image-topic", "vocabulary-cards", "verb-bank", "sentence-builder", "connector-bank", "guided-questions", "recap", "feedback", "homework"],
+    allowedLayouts: ["cover", "image-topic", "vocabulary-cards", "verb-bank", "sentence-builder", "connector-bank", "guided-questions", "recap", "feedback", "homework"],
     density: "low", bilingualBehavior: "Target language first; support language directly underneath.",
     imageUsage: "Bundled illustration or explicit planned image slot; never an invented URL.", maxQuestionsPerScreen: 4,
     activityTypes: ["visual naming", "compact word banks", "sentence building", "guided speaking"],
@@ -71,7 +72,7 @@ const definitions: Record<LessonArchetype, LessonArchetypeDefinition> = {
   },
   "travel-culture": {
     id: "travel-culture", label: "Travel and culture", engine: "intermediate",
-    allowedLayouts: ["topic-menu", "image-topic", "vocabulary-cards", "illustrated-context", "sentence-builder", "dialogue", "personal-prompts", "recap", "homework"],
+    allowedLayouts: ["cover", "image-topic", "vocabulary-cards", "illustrated-context", "sentence-builder", "dialogue", "personal-prompts", "recap", "homework"],
     density: "medium", bilingualBehavior: "Level-dependent bilingual support.", imageUsage: "Place image or repository-owned destination diagram.",
     maxQuestionsPerScreen: 4, activityTypes: ["visual exploration", "functional language", "scenario", "culture comparison"], hierarchy: "Place, useful language, decision, conversation.",
     teacherControls: ["example"], sequence: ["Destination", "language", "scenario", "culture", "recap"],
@@ -107,8 +108,10 @@ export const lessonFormatOptions: Array<{ value: LessonFormat; label: string; de
   { value: "custom", label: "Custom instructions", description: "Your class instructions guide the closest safe lesson archetype." },
 ];
 
-export function selectLessonArchetype(request: LessonRequest): LessonArchetypeDefinition {
-  const topic = `${request.source} ${request.customClassInstructions} ${request.learningGoal}`.toLocaleLowerCase();
+export function selectLessonArchetype(request: LessonRequest, intent?: InterpretedLessonIntent): LessonArchetypeDefinition {
+  const topic = `${intent?.topic ?? request.source} ${request.customClassInstructions} ${request.learningGoal}`.toLocaleLowerCase();
+  const inferredSourceMaterial = request.sourceMode === "idea"
+    && (request.source.length > 700 || request.source.split(/\n+/).filter(Boolean).length >= 4);
   const explicit: Partial<Record<LessonFormat, LessonArchetype>> = {
     "beginner-visual-vocabulary": "beginner-visual-topic",
     "grammar-workshop": ["A0", "A1"].includes(request.level) ? "beginner-essential-grammar" : "intermediate-grammar-workshop",
@@ -122,7 +125,7 @@ export function selectLessonArchetype(request: LessonRequest): LessonArchetypeDe
   if (request.lessonFormat !== "automatic" && request.lessonFormat !== "custom" && explicit[request.lessonFormat]) {
     return definitions[explicit[request.lessonFormat]!];
   }
-  if (request.sourceMode !== "idea") return definitions["source-comprehension"];
+  if (request.sourceMode === "video" || intent?.sourceKind === "source-material" || inferredSourceMaterial) return definitions["source-comprehension"];
   if (/work|business|interview|professional|meeting/.test(topic)) return definitions["professional-scenario"];
   if (/travel|buenos aires|culture|ciudad|viaje/.test(topic)) {
     if (["A0", "A1"].includes(request.level)) return definitions["beginner-visual-topic"];
@@ -140,7 +143,7 @@ export function classPlanPreview(request: LessonRequest) {
   const archetype = selectLessonArchetype(request);
   return {
     ...archetype,
-    screens: targetScreenCount(request.duration),
+    screens: targetScreenCount(request.duration, request.level),
     structure: archetype.sequence.slice(0, 6).join(" → "),
   };
 }

@@ -32,27 +32,29 @@ const serEstarRequest: LessonRequest = {
   lessonFocus: "grammar-focused",
 };
 
-test("language architecture uses stable IDs with English and Spanish first", () => {
-  assert.deepEqual(languageOptions.slice(0, 2), [{ id: "en", label: "English" }, { id: "es", label: "Spanish" }]);
+test("language architecture uses stable IDs with Spanish and English first", () => {
+  assert.deepEqual(languageOptions.slice(0, 2), [{ id: "es", label: "Spanish" }, { id: "en", label: "English" }]);
   assert.equal(normalizeLanguageId("ENGLISH"), "en");
   assert.equal(normalizeLanguageId("Spanish"), "es");
   assert.equal(normalizeLanguageId("español"), "es");
   assert.equal(validateLessonRequest({ ...defaultLessonRequest, language: "SPANISH", supportLanguage: "English" }).ok, true);
 });
 
-test("builder exposes searchable target/support comboboxes and an explicit language mode", () => {
+test("builder exposes native target/support selectors and keeps language mode collapsed", () => {
   const builder = readFileSync(new URL("../components/LessonBuilder.tsx", import.meta.url), "utf8");
-  assert.match(builder, /role="combobox"/);
+  assert.doesNotMatch(builder, /role="combobox"|<datalist/);
   assert.match(builder, /id="target-language"/);
   assert.match(builder, /id="support-language"/);
-  assert.match(builder, /Lesson language mode/);
+  assert.match(builder, /<select id=\{id\}/);
+  assert.match(builder, /Language balance/);
   assert.match(builder, /Smart by level/);
   assert.match(builder, /Bilingual/);
+  assert.match(builder, /<details className="text-class-more"/);
 });
 
 test("lesson plan locks topic, bilingual contract and prohibited preset leakage", () => {
   const plan = createLessonPlan(serEstarRequest);
-  assert.equal(plan.exactTopic, "Verbos ser y estar");
+  assert.equal(plan.exactTopic, "ser y estar");
   assert.equal(plan.specializedTemplate, "ser-estar");
   assert.equal(plan.language.targetLabel, "Spanish");
   assert.equal(plan.language.supportLabel, "English");
@@ -71,7 +73,7 @@ test("switching from invalid video to idea clears video-only state and allows ge
   assert.equal(activeSourceIsReady(idea), true);
   assert.equal(validateLessonRequest(idea).ok, true);
   const lesson = await deterministicProvider.generate(idea, context);
-  assert.equal(lesson.title, "SER vs ESTAR");
+  assert.equal(lesson.title, "SER y ESTAR");
 });
 
 test("automatic local captions succeed and unavailable captions fail honestly", async () => {
@@ -84,13 +86,12 @@ test("automatic local captions succeed and unavailable captions fail honestly", 
   );
 });
 
-test("video fallback keeps uploaded media primary and manual transcript secondary", () => {
-  const builder = readFileSync(new URL("../components/LessonBuilder.tsx", import.meta.url), "utf8");
-  const upload = builder.indexOf("Upload the video or audio file");
-  const manual = builder.indexOf("Advanced: paste transcript manually");
-  assert.ok(upload > -1);
-  assert.ok(manual > upload);
-  assert.match(builder, /Imported transcript · editable/);
+test("single-input YouTube flow uses the transcript endpoint and keeps setup failures visible", () => {
+  const app = readFileSync(new URL("../components/LessonApp.tsx", import.meta.url), "utf8");
+  assert.match(app, /detectLessonInput/);
+  assert.match(app, /fetch\("\/api\/transcripts"/);
+  assert.match(app, /YouTube captions are unavailable/);
+  assert.doesNotMatch(app, /mock captions|fake generated/i);
 });
 
 test("ser/estar output obeys topic, language, pedagogy and visual-layout contracts", async () => {
@@ -100,15 +101,15 @@ test("ser/estar output obeys topic, language, pedagogy and visual-layout contrac
   assert.doesNotMatch(text, /living abroad|adapting to a new culture/i);
   assert.ok(topicCoverageScore(lesson, serEstarRequest) >= 0.8);
   assert.equal(validateTopicAndLanguage(lesson, serEstarRequest).ok, true);
-  assert.ok(lesson.screens.some((screen) => screen.layout === "comparison"));
-  assert.ok(lesson.screens.some((screen) => screen.layout === "sorting"));
+  assert.ok(lesson.screens.some((screen) => screen.layout === "grammar-contrast"));
+  assert.ok(lesson.screens.some((screen) => screen.layout === "visual-menu-grid"));
   assert.ok(lesson.screens.some((screen) => screen.type === "error-correction"));
   assert.ok(lesson.screens.some((screen) => screen.type === "personal-questions"));
-  assert.ok(lesson.screens.some((screen) => screen.layout === "dialogue"));
-  assert.ok(lesson.screens.some((screen) => screen.type === "answer-key"));
+  assert.ok(lesson.screens.some((screen) => screen.layout === "role-play-scenario"));
+  assert.equal(lesson.screens.some((screen) => screen.type === "answer-key"), false);
   assert.ok(new Set(lesson.screens.map((screen) => screen.layout)).size >= 6);
-  assert.match(text, /Soy Elena|Estoy contenta|Madrid está en España/);
-  assert.match(text, /Two verbs|Choose|identity/);
+  assert.match(text, /Soy de|Estoy en|Madrid está en España/);
+  assert.match(text, /Two verbs|Choose|identity/i);
   assert.equal(toStudentLesson(lesson).screens.some((screen) => screen.answers.length || screen.teacherNotes.length || screen.type === "answer-key"), false);
 });
 
@@ -138,7 +139,7 @@ test("one structured provider repair preserves the original request", async () =
     async generate(request, providerContext) {
       calls += 1;
       assert.equal(request.source, "Verbos ser y estar");
-      if (calls === 1) return { ...valid, title: "Living abroad", screens: valid.screens.map((screen) => ({ ...screen, title: "Living abroad" })) };
+      if (calls === 1) return { ...valid, screens: [] };
       repairErrors = providerContext.repairErrors;
       return valid;
     },
@@ -146,7 +147,7 @@ test("one structured provider repair preserves the original request", async () =
   const lesson = await generateLesson(serEstarRequest, provider, { config, cache: disabledGenerationCache, logger() {} });
   assert.equal(calls, 2);
   assert.ok((repairErrors?.length ?? 0) > 0);
-  assert.equal(lesson.title, "SER vs ESTAR");
+  assert.equal(lesson.title, "SER y ESTAR");
 });
 
 test("local provider derives other lessons from the actual request", async () => {
@@ -214,7 +215,7 @@ test("PDF packs remain topic-correct, bilingual and private", async () => {
   const lesson = await deterministicProvider.generate(serEstarRequest, context);
   const student = pdfScreensForMode(lesson, "student");
   assert.equal(student.some((screen) => screen.type === "answer-key" || screen.answers.length || screen.teacherNotes.length), false);
-  assert.match(JSON.stringify(student), /SER vs ESTAR|Dos verbos/);
+  assert.match(JSON.stringify(student), /SER y ESTAR|Dos verbos/);
   const bytes = await generateLessonPdf(lesson, "student");
   assert.equal(Buffer.from(bytes).subarray(0, 4).toString(), "%PDF");
   assert.ok(bytes.length > 5_000);

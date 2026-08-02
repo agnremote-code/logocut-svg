@@ -103,7 +103,7 @@ export const lessonDraftJsonSchema = {
           timing: { type: "integer" },
           layout: {
             type: "string",
-            enum: ["cover", "objective", "comparison", "rule-cards", "example-gallery", "vocabulary-cards", "illustrated-context", "sentence-builder", "multiple-choice", "sorting", "fill-gap", "error-correction", "dialogue", "pronunciation", "personal-prompts", "debate-cards", "recap", "homework", "topic-menu", "image-topic", "verb-bank", "connector-bank", "guided-questions", "feedback"],
+            enum: ["cover", "objective", "comparison", "rule-cards", "example-gallery", "vocabulary-cards", "illustrated-context", "sentence-builder", "multiple-choice", "sorting", "fill-gap", "error-correction", "dialogue", "pronunciation", "personal-prompts", "debate-cards", "recap", "homework", "topic-menu", "image-topic", "verb-bank", "connector-bank", "guided-questions", "feedback", "hero-cover", "visual-menu-grid", "split-image-questions", "how-it-works-cards", "map-hub", "vocabulary-expression-bank", "role-play-scenario", "photo-choice", "opinion-switch", "rapid-fire", "final-manifesto", "dynamic-panel", "grammar-contrast", "canva-sentence-builder", "feedback-screen"],
           },
           sourceExcerpt: { type: "string" },
           videoId: { type: "string" },

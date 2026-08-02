@@ -60,10 +60,15 @@ export function buildBeginnerScreens(request: LessonRequest, topic: string) {
     screens.push(make(screens.length, type, layout, screenTitle, anchoredInstruction, options));
   };
 
-  add("cover", "topic-menu", title, pair("Elegí una palabra. Después, construí una frase.", "Choose a word. Then build a sentence."), {
-    body: pair(routine ? "MAÑANA · TARDE · NOCHE" : family ? "PERSONAS · RUTINAS · JUNTOS" : "LUGARES · PERSONAS · COSAS", routine ? "MORNING · AFTERNOON · EVENING" : family ? "PEOPLE · ROUTINES · TOGETHER" : "PLACES · PEOPLE · THINGS"),
-    prompts: [pair("Palabras", "Words"), pair("Verbos", "Verbs"), pair("Frases", "Sentences"), pair("Preguntas", "Questions")],
-    teacherNotes: ["Goal: activate concrete language before asking the learner to speak."], timing: 2,
+  add("cover", "cover", title, pair("Mirá, escuchá y preparate para hablar.", "Look, listen and get ready to speak."), {
+    body: pair(routine ? "UN DÍA EN MOVIMIENTO" : family ? "PERSONAS QUE IMPORTAN" : buenosAires ? "UNA CIUDAD, MUCHAS HISTORIAS" : "UNA IDEA PARA COMUNICAR", routine ? "A DAY IN MOTION" : family ? "PEOPLE WHO MATTER" : buenosAires ? "ONE CITY, MANY STORIES" : "ONE IDEA TO COMMUNICATE"),
+    prompts: [],
+    teacherNotes: ["Open with the designed cover and one clear promise; do not preview app modules."], timing: 2,
+  });
+  add("objective", "objective", "Meta visual", pair("Al final, vas a usar palabras y frases para hablar del tema.", "By the end, you will use words and sentences to talk about the topic."), {
+    prompts: [pair(`Puedo hablar de ${title}.`, `I can talk about ${title}.`)],
+    answers: [pair("Una frase completa y clara.", "One clear complete sentence.")],
+    teacherNotes: ["Point to the outcome, then move immediately into the visual context."], timing: 3,
   });
   add("context", "image-topic", routine ? "Un día, paso a paso" : family ? "Mi familia" : "Una ciudad para mirar", pair("Mirá la ilustración. Nombrá tres cosas.", "Look at the illustration. Name three things."), {
     body: routine ? "☀️  07:00  →  ☕  →  💻  →  🍽️  →  🌙" : family ? "👩  👨  👧  👦  🏠" : "☀️  🏛️  ☕  🚌  🌳  👥",
@@ -121,7 +126,7 @@ export function buildBeginnerScreens(request: LessonRequest, topic: string) {
     });
   }
 
-  const beforeKey = targetScreenCount(request.duration) - 1;
+  const beforeKey = targetScreenCount(request.duration, request.level) - 1;
   let round = 1;
   while (screens.length < beforeKey) {
     add("controlled-practice", round % 2 ? "sentence-builder" : "guided-questions", `Práctica visual ${round}`, pair("Elegí una opción y creá una frase nueva.", "Choose one option and make a new sentence."), {

@@ -28,7 +28,7 @@ export function validateTopicAndLanguage(lesson: LessonDraft, request: LessonReq
   }
   if (plan.specializedTemplate === "ser-estar") {
     if (!/\bser\b/i.test(lesson.title) || !/\bestar\b/i.test(lesson.title)) errors.push("Lesson title must identify Ser and Estar.");
-    if (!lesson.screens.some((screen) => screen.layout === "comparison")) errors.push("Ser/estar lesson needs a two-column comparison.");
+    if (!lesson.screens.some((screen) => screen.layout === "comparison" || screen.layout === "grammar-contrast")) errors.push("Ser/estar lesson needs a two-column comparison.");
     if (!lesson.screens.some((screen) => screen.type === "error-correction")) errors.push("Ser/estar lesson needs error correction.");
     if (!lesson.screens.some((screen) => screen.type === "personal-questions")) errors.push("Ser/estar lesson needs personal speaking practice.");
   }

@@ -54,7 +54,24 @@ export const screenLayouts = [
   "connector-bank",
   "guided-questions",
   "feedback",
+  "hero-cover",
+  "visual-menu-grid",
+  "split-image-questions",
+  "how-it-works-cards",
+  "map-hub",
+  "vocabulary-expression-bank",
+  "role-play-scenario",
+  "photo-choice",
+  "opinion-switch",
+  "rapid-fire",
+  "final-manifesto",
+  "dynamic-panel",
+  "grammar-contrast",
+  "canva-sentence-builder",
+  "feedback-screen",
 ] as const;
+
+export const visualSystems = ["bright-classroom", "editorial", "bold-quest", "playful-map"] as const;
 
 export type LessonLevel = (typeof lessonLevels)[number];
 export type LessonDuration = number;
@@ -67,6 +84,7 @@ export type SkillFocus = (typeof skills)[number];
 export type LanguageId = (typeof languageIds)[number];
 export type LanguageMode = (typeof languageModes)[number];
 export type ScreenLayout = (typeof screenLayouts)[number];
+export type VisualSystem = (typeof visualSystems)[number];
 export type StudentType = "individual" | "group";
 export type PracticeDensity = "compact" | "standard" | "repetition-heavy";
 export type Dialect = "neutral" | "rioplatense" | "spain" | "mexican" | "custom";
@@ -248,4 +266,9 @@ export const defaultLessonRequest: LessonRequest = {
   continueOrCorrect: "",
   recentTopics: [],
   recentVocabulary: [],
+};
+
+export const emptyLessonRequest: LessonRequest = {
+  ...defaultLessonRequest,
+  source: "",
 };
